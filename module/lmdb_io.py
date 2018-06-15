@@ -11,7 +11,6 @@ import lmdb
 import numpy
 from caffe.proto.caffe_pb2 import Datum
 
-
 def version_compare(version_a, version_b):
     """
     Compare two versions given as strings, taken from `here`_.
@@ -29,7 +28,7 @@ def version_compare(version_a, version_b):
     def normalize(v):
         return [int(x) for x in re.sub(r'(\.0+)*$', '', v).split(".")]
 
-    return normalize(version_a) < normalize(version_b)
+    return normalize(version_a) > normalize(version_b)
 
 
 def to_key(i):
@@ -194,7 +193,7 @@ class LMDB:
 
         return keys
 
-    def write(self, images, labels=None, keys=None):
+    def write(self, images, labels=None, keys=None, flag="labels"):
         """
         Write a single image or multiple images and the corresponding label(s).
         The imags are expected to be two-dimensional NumPy arrays with
@@ -211,38 +210,72 @@ class LMDB:
         """
         if type(labels) == list and len(labels) > 0:
             assert len(images) == len(labels)
+        if flag == "labels":
+            keys_ = []
+            env = lmdb.open(self._lmdb_path, map_size=max(1099511627776, len(images) * images[0].nbytes))
 
-        keys_ = []
-        env = lmdb.open(self._lmdb_path, map_size=max(1099511627776, len(images) * images[0].nbytes))
+            with env.begin(write=True) as transaction:
+                for i in range(len(images)):
+                    datum = Datum()
+                    datum.data = images[i].tobytes()
 
-        with env.begin(write=True) as transaction:
-            for i in range(len(images)):
-                datum = Datum()
-                datum.channels = images[i].shape[2]
-                datum.height = images[i].shape[0]
-                datum.width = images[i].shape[1]
+                    assert version_compare(numpy.version.version,
+                                           '1.9') is True, "installed numpy is 1.9 or higher, change .tostring() to .tobytes()"
 
-                assert version_compare(numpy.version.version,
-                                       '1.9') is True, "installed numpy is 1.9 or higher, change .tostring() to .tobytes()"
-                assert images[i].dtype == numpy.uint8 or images[
-                    i].dtype == numpy.float, "currently only numpy.uint8 and numpy.float images are supported"
+                    if type(labels) == list and len(labels) > 0:
+                        # datum.label = labels[i]
+                        t = labels[i]
+                        print(t)
+                        datum.label = t
+                    else:
+                        datum.label = -1
 
-                if images[i].dtype == numpy.uint8:
-                    datum.data = images[i].transpose(2, 0, 1).tostring()
-                else:
-                    datum.float_data.extend(images[i].transpose(2, 0, 1).flat)
+                    key = to_key(self._write_pointer)
+                    if keys:
+                        key = key + "_" + keys[i]
+                    keys_.append(key)
 
-                if type(labels) == list and len(labels) > 0:
-                    datum.label = labels[i]
-                else:
-                    datum.label = None
+                    transaction.put(key.encode('UTF-8'), datum.SerializeToString())
+                    self._write_pointer += 1
+                    if i % 100 == 0:
+                        print("writing images to lmdb database... ", i)
+        else:
+            keys_ = []
+            env = lmdb.open(self._lmdb_path, map_size=max(1099511627776, len(images) * images[0].nbytes))
 
-                key = to_key(self._write_pointer)
-                if keys:
-                    key = key + "_" + keys[i]
-                keys_.append(key)
+            with env.begin(write=True) as transaction:
+                for i in range(len(images)):
+                    datum = Datum()
+                    datum.channels = images[i].shape[2]
+                    datum.height = images[i].shape[0]
+                    datum.width = images[i].shape[1]
 
-                transaction.put(key.encode('UTF-8'), datum.SerializeToString())
-                self._write_pointer += 1
+                    assert version_compare(numpy.version.version,
+                                           '1.9') is True, "installed numpy is 1.9 or higher, change .tostring() to .tobytes()"
+                    assert images[i].dtype == numpy.uint8 or images[
+                        i].dtype == numpy.float, "currently only numpy.uint8 and numpy.float images are supported"
+
+                    if images[i].dtype == numpy.uint8:
+                        datum.data = images[i].transpose(2, 0, 1).tobytes()
+                    else:
+                        datum.float_data.extend(images[i].transpose(2, 0, 1).flat)
+
+                    if type(labels) == list and len(labels) > 0:
+                        # datum.label = labels[i]
+                        t = labels[i]
+                        print(t)
+                        datum.label = t
+                    else:
+                        datum.label = -1
+
+                    key = to_key(self._write_pointer)
+                    if keys:
+                        key = key + "_" + keys[i]
+                    keys_.append(key)
+
+                    transaction.put(key.encode('UTF-8'), datum.SerializeToString())
+                    self._write_pointer += 1
+                    if i % 100 == 0:
+                        print("writing images to lmdb database... ", i)
 
         return keys_
