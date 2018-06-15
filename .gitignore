@@ -1,9 +1,11 @@
-/.idea
-/.ipynb_checkpoints
+.idea/
+.ipynb_checkpoints/
 *.h5
 *.pyc
-*/train_lmdb
-*/val_lmdb
+train_lmdb/
+val_lmdb/
+train_lmdb_x/
+val_lmdb_y/
 
 
 # Byte-compiled / optimized / DLL files
