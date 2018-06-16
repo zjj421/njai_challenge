@@ -28,20 +28,22 @@ def make_database():
     file_path_lst = [os.path.join(data_root, f) for f in lines[:, 0]]
 
     assert sorted(file_path_lst) == sorted(get_file_path_from_dir(data_root))
+    labels = list(lines[:, 1:].astype(np.uint16))
+    # keys = list(lines[:, 0])
+    lmdb_y.write(labels, None, None, "labels")
+
     images = []
     for i, file_path in enumerate(file_path_lst):
-        if i > 999:
-            break
         im = Image.open(file_path)
         im = np.array(im, dtype=np.uint8)
         images.append(im)
         if i % 100 == 0:
             print("loading images... ", i)
-    labels = list(lines[:, 1:].astype(np.uint16))[:1000]
-
-    keys = list(lines[:, 0])[:1000]
-    lmdb_x.write(images, None, keys, "images")
-    lmdb_y.write(labels, None, keys, "labels")
+        if i % 10000 == 0:
+            lmdb_x.write(images, None, None, "images")
+            images.clear()
+            print("images clear")
+    lmdb_x.write(images, None, None, "images")
     print(lmdb_x.count())
     print(lmdb_y.count())
 
