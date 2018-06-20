@@ -2,10 +2,10 @@
 # -*- coding: utf-8 -*-
 # Created by zjj421 on 18-6-15
 # Task: 
-# Insights: 
-
-from datetime import datetime
+# Insights:
 import os
+from datetime import datetime
+
 
 def get_file_path_from_dir(dir_path):
     """

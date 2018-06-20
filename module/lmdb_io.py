@@ -62,29 +62,11 @@ class LMDB:
         """
 
         self._lmdb_path = lmdb_path
+        print(self._lmdb_path)
         """ (string) The path to the LMDB to read or write. """
 
         self._write_pointer = 0
         """ (int) Pointer for writing and appending. """
-
-    def read(self, key=''):
-        """
-        Read a single element or the whole LMDB depending on whether 'key'
-        is specified. Essentially a prox for :func:`lmdb.LMDB.read_single`
-        and :func:`lmdb.LMDB.read_all`.
-
-        :param key: key as 8-digit string of the entry to read
-        :type key: string
-        :return: data and labels from the LMDB as associate dictionaries, where
-            the key as string is the dictionary key and the value the numpy.ndarray
-            for the data and the label for the labels
-        :rtype: ({string: numpy.ndarray}, {string: float})
-        """
-
-        if not key:
-            return self.read_all();
-        else:
-            return self.read_single(key);
 
     def read_single(self, key):
         """
@@ -117,6 +99,25 @@ class LMDB:
                                                                                   datum.width).transpose(1, 2, 0)
 
         return image, label, key
+
+    def read(self, key=''):
+        """
+        Read a single element or the whole LMDB depending on whether 'key'
+        is specified. Essentially a prox for :func:`lmdb.LMDB.read_single`
+        and :func:`lmdb.LMDB.read_all`.
+
+        :param key: key as 8-digit string of the entry to read
+        :type key: string
+        :return: data and labels from the LMDB as associate dictionaries, where
+            the key as string is the dictionary key and the value the numpy.ndarray
+            for the data and the label for the labels
+        :rtype: ({string: numpy.ndarray}, {string: float})
+        """
+
+        if not key:
+            return self.read_all();
+        else:
+            return self.read_single(key);
 
     def read_all(self):
         """
