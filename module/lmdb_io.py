@@ -6,10 +6,10 @@ Module for comfortably reading and writing LMDBs.
 
 import re
 
-import caffe
 import lmdb
 import numpy
 from caffe.proto.caffe_pb2 import Datum
+
 
 def version_compare(version_a, version_b):
     """
