@@ -14,8 +14,8 @@ val_lmdb_y/
 **/train_lmdb_y/
 **/val_lmdb_y/
 
-**/inputs/
-**/input/
+# **/inputs/
+# **/input/
 
 
 # Byte-compiled / optimized / DLL files
