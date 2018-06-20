@@ -2,8 +2,8 @@
 # -*- coding: utf-8 -*-
 # Created by zjj421 on 18-6-15
 # Task: make lmdb database
-# Insights: 
-
+# Insights:
+import h5py
 from datetime import datetime
 import pandas as pd
 import numpy as np
@@ -48,8 +48,34 @@ def make_database():
     print(lmdb_y.count())
 
 
+def make_hdf5_database():
+    data_root = "/media/topsky/HHH/jzhang_root/data/njai/端网云捷无人零售(衣物)图像识别比赛数据集"
+    train_txt = "train.txt"
+    hdf5_path = "data.hdf5"
+    f = h5py.File(hdf5_path, "w")
+    x = f.create_group("images")
+    y = f.create_group("labels")
+
+    with open(train_txt, "r") as f:
+        lines = f.readlines()
+        lines = [line.split() for line in lines[2:]]
+        lines = np.array(lines)
+    file_path_lst = [os.path.join(data_root, f) for f in lines[:, 0]]
+
+    assert sorted(file_path_lst) == sorted(get_file_path_from_dir(data_root))
+    labels = list(lines[:, 1:].astype(np.uint16))
+    for i, (file_path, label) in enumerate(zip(file_path_lst, labels)):
+        idx = "{:08}".format(i + 1)
+        im = Image.open(file_path)
+        im = np.array(im, dtype=np.uint8)
+        x.create_dataset(idx, dtype=np.uint8, data=im)  # [0, 255]
+        y.create_dataset(idx, dtype=np.uint16, data=label)  # box坐标信息，用np.unit16表示，表示范围[0, 65535]。
+        if i % 100 == 0:
+            print("loading images and labels... ", i)
+
+
 def __main():
-    make_database()
+    make_hdf5_database()
 
 
 if __name__ == '__main__':
