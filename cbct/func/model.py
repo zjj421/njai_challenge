@@ -9,12 +9,12 @@ from keras import Input, Model
 from keras.layers import Conv2D, MaxPooling2D, Dropout, UpSampling2D, Concatenate
 from keras.optimizers import Adam
 
-from cbct.func.utils import IMG_H, IMG_W
+from cbct.func.utils import IMG_H, IMG_W, IMG_C
 
 
 def unet():
-    img_h, img_w = IMG_H, IMG_W
-    inputs = Input((img_h, img_w, 3))
+    img_h, img_w, img_c = IMG_H, IMG_W, IMG_C
+    inputs = Input((img_h, img_w, img_c))
 
     conv1 = Conv2D(64, 3, activation='relu', padding='same', kernel_initializer='he_normal')(inputs)
     conv1 = Conv2D(64, 3, activation='relu', padding='same', kernel_initializer='he_normal')(conv1)
@@ -61,10 +61,10 @@ def unet():
     conv9 = Conv2D(64, 3, activation='relu', padding='same', kernel_initializer='he_normal')(conv9)
     conv9 = Conv2D(6, 3, activation='relu', padding='same', kernel_initializer='he_normal')(conv9)
 
-    conv10 = Conv2D(3, 1, activation='sigmoid')(conv9)
+    conv10 = Conv2D(1, 1, activation='sigmoid')(conv9)
 
     model = Model(inputs=inputs, outputs=conv10)
-    model.compile(optimizer=Adam(lr=1e-4), loss='binary_crossentropy', metrics=['accuracy'])
+    # model.compile(optimizer=Adam(lr=1e-4), loss='binary_crossentropy', metrics=['accuracy'])
     return model
 
 

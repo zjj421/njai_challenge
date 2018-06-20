@@ -1,18 +1,18 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # Created by zjj421 on 18-6-20
 # Task: 
 # Insights:
 import math
 
-import h5py
 import os
 from datetime import datetime
 
+import h5py
 from PIL import Image
 import numpy as np
 
-from cbct.func.utils import generate_data_custom, Data_Generator
+from cbct.func.utils import generate_data_custom
 
 
 def data_analysis():
@@ -103,50 +103,79 @@ def data_analysis():
 
 
 def make_hdf5_database():
-    data_root = "/media/topsky/HHH/jzhang_root/data/njai/cbct"
-    hdf5_path = "/home/topsky/helloworld/study/njai_challenge/cbct/inputs/data.hdf5"
+    data_root = "/media/zj/share/data/njai_2018/cbct"
+    hdf5_path = "/home/zj/helloworld/study/njai_challenge/cbct/inputs/data_test.hdf5"
     f = h5py.File(hdf5_path, "w")
-    x = f.create_group("images")
-    y = f.create_group("labels")
+    grp_x = f.create_group("images")
+    grp_y = f.create_group("labels")
     file_basename_lst = next(os.walk(os.path.join(data_root, "train")))[2]
     train_file_path_lst = [os.path.join(data_root, "train", x) for x in file_basename_lst]
     label_file_path_lst = [os.path.join(data_root, "label", x) for x in file_basename_lst]
 
     for i in range(len(file_basename_lst)):
-        idx = "{:08}".format(i + 1)
+        idx = '{:08}'.format(i + 1)
         image = Image.open(train_file_path_lst[i])
         image = np.array(image, dtype=np.uint8)
         if len(image.shape) == 3:
             image = image[:, :, 0]
-        x.create_dataset(idx, dtype=np.uint8, data=image)  # [0, 255]
+        grp_x.create_dataset(idx, dtype=np.uint8, data=image)  # [0, 255]
 
         label = Image.open(label_file_path_lst[i])
         label = np.array(label, dtype=np.uint8)
         if len(label.shape) == 3:
             label = label[:, :, 0]
-        y.create_dataset(idx, dtype=np.uint8, data=label)
+        grp_y.create_dataset(idx, dtype=np.uint8, data=label)
         if i % 10 == 0:
             print("loading images and labels... ", i)
 
 
+def add_train_val_id_hdf5():
+    hdf5_path = "/home/zj/helloworld/study/njai_challenge/cbct/inputs/data.hdf5"
+    f = h5py.File(hdf5_path, mode="r+")
+    # del f["train_id"], f["val_id"]
+    # exit()
+    keys = list(f["images"].keys())
+    print(keys)
+    print(type(keys[0]))
+    keys = [x.encode() for x in keys]
+    print(keys)
+    print(type(keys[0]))
+    keys = [np.void(x) for x in keys]
+    print(keys)
+    print(type(keys[0]))
+    np.random.shuffle(keys)
+    print(keys)
+    split = int(len(keys) * 0.8)
+    for name in f:
+        print(name)
+    f.create_dataset("train_id", data=keys[:split])
+    f.create_dataset("val_id", data=keys[split:])
+    v = f["train_id"].value
+    v = [x.tostring().decode() for x in v]
+    print(v)
+    print(len(v))
+    f.close()
+
+
 def generate_data_custom_test():
-    hdf5_path = "/home/topsky/helloworld/study/njai_challenge/cbct/inputs/data.hdf5"
+    hdf5_path = "/home/zj/helloworld/study/njai_challenge/cbct/inputs/data.hdf5"
     # gen = Data_Generator(hdf5_path, 8)
-    f = generate_data_custom(hdf5_path, 16)
-    for i in range(100):
+    f = generate_data_custom(hdf5_path, 16, mode="train")
+    print(len(f))
+    print(type(f))
+    for i in range(2):
         # print(len(images) == len(labels))
         # print(len(images))
         images, labels = next(f)
         print(len(images))
-        # print(images[0].shape)
+        print(images[0].shape)
         # print(labels[0].shape)
 
 
-
-
-
 def __main():
+    # make_hdf5_database()
     generate_data_custom_test()
+
 
 if __name__ == '__main__':
     start = datetime.now()
