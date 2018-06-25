@@ -3,16 +3,15 @@
 # Created by zjj421 on 18-6-20
 # Task: 
 # Insights:
-import math
 
 import os
 from datetime import datetime
 
 import h5py
-from PIL import Image
 import numpy as np
+from PIL import Image
 
-from cbct.func.utils import generate_data_custom
+from cbct.func.utils import DataGeneratorCustom
 
 
 def data_analysis():
@@ -103,8 +102,8 @@ def data_analysis():
 
 
 def make_hdf5_database():
-    data_root = "/media/zj/share/data/njai_2018/cbct"
-    hdf5_path = "/home/zj/helloworld/study/njai_challenge/cbct/inputs/data_test.hdf5"
+    data_root = "/media/topsky/HHH/jzhang_root/data/njai/cbct"
+    hdf5_path = "/home/topsky/helloworld/study/njai_challenge/cbct/inputs/data.hdf5"
     f = h5py.File(hdf5_path, "w")
     grp_x = f.create_group("images")
     grp_y = f.create_group("labels")
@@ -130,7 +129,7 @@ def make_hdf5_database():
 
 
 def add_train_val_id_hdf5():
-    hdf5_path = "/home/zj/helloworld/study/njai_challenge/cbct/inputs/data.hdf5"
+    hdf5_path = "/home/topsky/helloworld/study/njai_challenge/cbct/inputs/data.hdf5"
     f = h5py.File(hdf5_path, mode="r+")
     # del f["train_id"], f["val_id"]
     # exit()
@@ -158,15 +157,16 @@ def add_train_val_id_hdf5():
 
 
 def generate_data_custom_test():
-    hdf5_path = "/home/zj/helloworld/study/njai_challenge/cbct/inputs/data.hdf5"
+    hdf5_path = "/home/topsky/helloworld/study/njai_challenge/cbct/inputs/data.hdf5"
     # gen = Data_Generator(hdf5_path, 8)
-    f = generate_data_custom(hdf5_path, 16, mode="train")
+    f = DataGeneratorCustom(hdf5_path, 8, mode="train")
+    g = f.gen.itt
     print(len(f))
     print(type(f))
     for i in range(2):
         # print(len(images) == len(labels))
         # print(len(images))
-        images, labels = next(f)
+        images, labels = next(g)
         print(len(images))
         print(images[0].shape)
         # print(labels[0].shape)
@@ -174,6 +174,7 @@ def generate_data_custom_test():
 
 def __main():
     # make_hdf5_database()
+    # add_train_val_id_hdf5()
     generate_data_custom_test()
 
 

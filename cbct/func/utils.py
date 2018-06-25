@@ -3,10 +3,11 @@
 # Created by zjj421 on 18-6-20
 # Task: 
 # Insights:
-import h5py
 import math
+import threading
 from datetime import datetime
 
+import h5py
 import keras
 import numpy as np
 
@@ -24,10 +25,115 @@ def get_input_data(f_obj, tmp_keys, transform, is_train):
         if is_train:
             label = f_obj["labels"][key].value
             labels.append(label)
+    images = np.asarray(images)
+    labels = np.asarray(labels)
+    images = np.expand_dims(images, axis=-1)
+    labels = np.expand_dims(labels, axis=-1)
     return images, labels
 
-class data_generator_custom(keras.utils.Sequence):
 
+def preprocess(inputs_array):
+    images = inputs_array / 127.5
+    images -= 1.
+    return images
+
+
+# def get_input_data(f_obj, tmp_keys, transform, is_train):
+#     images = []
+#     labels = []
+#     for key in tmp_keys:
+#         image = f_obj["images"][key].value
+#         if transform:
+#             image = transform(image)
+#         images.append(image)
+#         if is_train:
+#             label = f_obj["labels"][key].value
+#             labels.append(label)
+#     images = np.asarray(images)
+#     labels = np.asarray(labels)
+#     images = np.expand_dims(images, axis=-1)
+#     labels = np.expand_dims(labels, axis=-1)
+#     return images, labels
+
+
+# def thread_safe_generator(f):
+#     """A decorator that takes a generator function and makes it thread-safe.
+#     https://github.com/fchollet/keras/issues/1638
+#     http://anandology.com/blog/using-iterators-and-generators/
+#     """
+#
+#     def g(*a, **kw):
+#         return ThreadSafeIter(f(*a, **kw))
+#
+#     return g
+#
+#
+# class ThreadSafeIter(object):
+#     def __init__(self):
+#         self.is_lock = threading.Lock()
+#         # self.itt = itt
+#
+#     # def __next__(self, itt):
+#     #     with self.is_lock:
+#     #         return next(itt)
+#
+#     def __iter__(self):
+#         return self
+#
+#     def next(self, itt):
+#         with self.is_lock:
+#             return next(itt)
+#
+#
+# global safe_next
+# safe_next = ThreadSafeIter()
+
+
+class DataGeneratorCustom(keras.utils.Sequence):
+    def __init__(self, hdf5_path, batch_size, mode, shuffle=True):
+        self.f = h5py.File(hdf5_path, 'r')
+        self.batch_size = batch_size
+        self.mode = mode
+        self.shuffle = shuffle
+        assert self.mode in ['train', 'val']
+        if self.mode == "train":
+            keys = self.f["train_id"].value
+        elif mode == "val":
+            keys = self.f["val_id"].value
+        else:
+            # keys = self.f["test_id"].value
+            raise NotImplementedError
+        self.keys = [k.tostring().decode() for k in keys]
+        self.gen = self.generator()
+        self.is_lock = threading.Lock()
+
+    # @thread_safe_generator
+    def generator(self):
+        steps = self.__len__()
+        total_steps = 0
+        while 1:
+            if self.shuffle:
+                np.random.shuffle(self.keys)
+            for step in range(steps):
+                total_steps += 1
+                print("\ttotal step:", total_steps)
+                print(threading.current_thread().name)
+                tmp_keys = self.keys[step * self.batch_size: (step + 1) * self.batch_size]
+                images, labels = get_input_data(self.f, tmp_keys, transform=False, is_train=True)
+                images = preprocess(images)
+                labels = preprocess(labels)
+                yield images, labels
+
+    def __len__(self):
+        return int(np.ceil(len(self.keys) / float(self.batch_size)))
+
+    def __getitem__(self, idx):
+        # 可能有Bug.
+        # if self.is_lock:
+
+        with self.is_lock:
+            batch_x, batch_y = next(self.gen)
+            return np.asarray(batch_x), np.asarray(batch_y)
 
 
 # h5py
@@ -58,10 +164,8 @@ def generate_data_custom(hdf5_path, batch_size, mode, shuffle=True):
             yield images, labels
 
 
-
-
 def __main():
-    pass
+    gen = DataGeneratorCustom()
 
 
 # lmdb

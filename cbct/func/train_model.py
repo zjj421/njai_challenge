@@ -4,20 +4,23 @@
 # Task: 
 # Insights: 
 
-from datetime import datetime
 import os
-import tensorflow as tf
+from datetime import datetime
+
+import keras
 import keras.backend.tensorflow_backend as KTF
 import numpy as np
 import pandas as pd
+import tensorflow as tf
 from keras.callbacks import EarlyStopping, ReduceLROnPlateau, ModelCheckpoint
+from keras.layers import DepthwiseConv2D
 from keras.models import load_model
 from keras.optimizers import Adam
 from keras.utils import CustomObjectScope, multi_gpu_model
-import keras
+from keras_applications.mobilenet_v2 import relu6
 
 from cbct.func.model import unet
-from cbct.func.utils import generate_data_custom
+from cbct.func.utils import DataGeneratorCustom
 
 
 class Multi_Gpu_Cbk(keras.callbacks.Callback):
@@ -39,26 +42,23 @@ def train_generator(model_saved_path, h5_data_path, batch_size, epochs, model_tr
                                   mode='auto')
 
     if model_trained:
-        with CustomObjectScope({'relu6': keras.applications.mobilenet.relu6,
-                                'DepthwiseConv2D': keras.applications.mobilenet.DepthwiseConv2D}):
+        with CustomObjectScope({'relu6': relu6,
+                                'DepthwiseConv2D': DepthwiseConv2D}):
             model = load_model(model_trained)
-            len_ = len(model.layers)
-            print("layers:", len_)
-            print(model.layers[-3].name)
-            for layer in model.layers:
-                # if layer.name == "conv2d_37":
-                #     break
-                layer.trainable = True
-
-
-                # model.cnn.trainable = False
+            # len_ = len(model.layers)
+            # print("layers:", len_)
+            # print(model.layers[-3].name)
+            # for layer in model.layers:
+            #     # if layer.name == "conv2d_37":
+            #     #     break
+            #     layer.trainable = True
     else:
         # model = MobileNetv2((224, 224, 3), 10)
         # model = simple_net()
         # model = get_resnet_model()
         model = unet()
-    train_data_generator = generate_data_custom(h5_data_path, batch_size, mode="train", shuffle=True)
-    val_data_generator = generate_data_custom(h5_data_path, batch_size, mode="val", shuffle=True)
+    train_data_generator = DataGeneratorCustom(h5_data_path, batch_size, mode="train", shuffle=True)
+    val_data_generator = DataGeneratorCustom(h5_data_path, batch_size, mode="val", shuffle=True)
     if gpus > 1:
         # with tf.device('/cpu:0'):
         parallel_model = multi_gpu_model(model, gpus=gpus)
@@ -73,41 +73,44 @@ def train_generator(model_saved_path, h5_data_path, batch_size, epochs, model_tr
             epochs=epochs,
             callbacks=[cbk1],
             verbose=1,
-            workers=2,
-            use_multiprocessing=True,
+            workers=1,
+            use_multiprocessing=False,
             shuffle=True
         )
 
     else:
-        model.compile(optimizer=opt, loss='categorical_crossentropy', metrics=["acc"])
+        model.compile(optimizer=opt, loss='binary_crossentropy', metrics=["acc"])
         model.summary()
         cbk1 = ModelCheckpoint(model_saved_path, save_best_only=True, monitor='val_acc', mode='max')
 
         hist = model.fit_generator(
             train_data_generator,
             validation_data=val_data_generator,
-            steps_per_epoch=count_train // batch_size,
-            validation_steps=count_val // batch_size,
+            steps_per_epoch=None,
+            validation_steps=None,
             epochs=epochs,
             callbacks=[cbk1],
             verbose=1,
-            workers=2,
-            use_multiprocessing=True,
+            workers=1,
+            use_multiprocessing=False,
             shuffle=True
         )
-    df = pd.DataFrame.from_dict(hist.history)
-    df.to_csv('tmp/hist.csv', encoding='utf-8', index=False)
 
-    best_epoch = np.argmax(hist.history.get("val_acc")) + 1
-    print("最好的epoch:", best_epoch)
-    try:
-        os.rename('tmp/model_at_epoch_{}.h5'.format(best_epoch), model_saved_path)
-    except:
-        print("rename失败。")
+    # df = pd.DataFrame.from_dict(hist.history)
+    # df.to_csv('tmp/hist.csv', encoding='utf-8', index=False)
+    #
+    # best_epoch = np.argmax(hist.history.get("val_acc")) + 1
+    # print("最好的epoch:", best_epoch)
+    # try:
+    #     os.rename('tmp/model_at_epoch_{}.h5'.format(best_epoch), model_saved_path)
+    # except:
+    #     print("rename失败。")
 
 
 def __main():
-    pass
+    model_saved_path = "model.h5"
+    h5_data_path = "/home/topsky/helloworld/study/njai_challenge/cbct/inputs/data.hdf5"
+    train_generator(model_saved_path, h5_data_path, batch_size=1, epochs=10, model_trained=model_saved_path, gpus=1)
 
 
 if __name__ == '__main__':
