@@ -13,14 +13,15 @@ import numpy as np
 import pandas as pd
 import tensorflow as tf
 from keras.callbacks import EarlyStopping, ReduceLROnPlateau, ModelCheckpoint
+from keras.engine.saving import load_model
 from keras.layers import DepthwiseConv2D
-from keras.models import load_model
 from keras.optimizers import Adam
+from keras.preprocessing.image import ImageDataGenerator
 from keras.utils import CustomObjectScope, multi_gpu_model
-from keras_applications.mobilenet_v2 import relu6
+from keras_applications.mobilenet import relu6
 
-from cbct.func.model import unet
-from cbct.func.utils import DataGeneratorCustom
+from func.model import unet, unet_keras, unet_kaggle
+from func.utils import DataGeneratorCustom, DataReader, IMG_C, IMG_W, IMG_H, mean_iou
 
 
 class Multi_Gpu_Cbk(keras.callbacks.Callback):
@@ -36,7 +37,7 @@ class Multi_Gpu_Cbk(keras.callbacks.Callback):
 
 
 def train_generator(model_saved_path, h5_data_path, batch_size, epochs, model_trained, gpus=1):
-    opt = Adam(lr=0.001)
+    opt = Adam(lr=1e-2)
     es = EarlyStopping('val_acc', patience=30, mode="auto", min_delta=0.0)
     reduce_lr = ReduceLROnPlateau(monitor='val_acc', factor=0.1, patience=20, verbose=2, epsilon=1e-4,
                                   mode='auto')
@@ -56,13 +57,41 @@ def train_generator(model_saved_path, h5_data_path, batch_size, epochs, model_tr
         # model = MobileNetv2((224, 224, 3), 10)
         # model = simple_net()
         # model = get_resnet_model()
-        model = unet()
-    train_data_generator = DataGeneratorCustom(h5_data_path, batch_size, mode="train", shuffle=True)
-    val_data_generator = DataGeneratorCustom(h5_data_path, batch_size, mode="val", shuffle=True)
+        # model = unet()
+        model = unet_kaggle()
+        # model = unet_keras(input_size=(IMG_H, IMG_W, IMG_C))
+
+    data_train = DataReader(h5_data_path, batch_size, mode="train", shuffle=True)
+    x_train, y_train = data_train.images, data_train.labels
+    datagen_train = ImageDataGenerator(
+        rotation_range=0.2,
+        width_shift_range=0.05,
+        height_shift_range=0.05,
+        horizontal_flip=True,
+        # vertical_flip=True,
+        # brightness_range=0.2,
+        shear_range=0.05,
+        zoom_range=0.05
+    )
+    train_data_generator = datagen_train.flow(x_train, y_train, batch_size, shuffle=True)
+
+    data_val = DataReader(h5_data_path, batch_size, mode="val", shuffle=False)
+    x_val, y_val = data_val.images, data_val.labels
+    datagen_val = ImageDataGenerator(
+        featurewise_center=False,
+        featurewise_std_normalization=False,
+        rotation_range=0.,
+        width_shift_range=0.,
+        height_shift_range=0.,
+        horizontal_flip=False)
+    val_data_generator = datagen_val.flow(x_val, y_val, batch_size, shuffle=False)
+
+    # train_data_generator = DataGeneratorCustom(h5_data_path, batch_size, mode="train", shuffle=True)
+    # val_data_generator = DataGeneratorCustom(h5_data_path, batch_size, mode="val", shuffle=True)
     if gpus > 1:
         # with tf.device('/cpu:0'):
         parallel_model = multi_gpu_model(model, gpus=gpus)
-        parallel_model.compile(optimizer=opt, loss='categorical_crossentropy', metrics=["acc"])
+        parallel_model.compile(optimizer=opt, loss='binary_crossentropy', metrics=["acc"])
         model.summary()
         cbk1 = Multi_Gpu_Cbk(model)
         hist = parallel_model.fit_generator(
@@ -79,7 +108,9 @@ def train_generator(model_saved_path, h5_data_path, batch_size, epochs, model_tr
         )
 
     else:
-        model.compile(optimizer=opt, loss='binary_crossentropy', metrics=["acc"])
+
+        model.compile(optimizer=opt, loss='binary_crossentropy', metrics=["acc", mean_iou])
+        # model.compile(optimizer=opt, loss='binary_crossentropy', metrics=["acc"])
         model.summary()
         cbk1 = ModelCheckpoint(model_saved_path, save_best_only=True, monitor='val_acc', mode='max')
 
@@ -109,8 +140,8 @@ def train_generator(model_saved_path, h5_data_path, batch_size, epochs, model_tr
 
 def __main():
     model_saved_path = "model.h5"
-    h5_data_path = "/home/topsky/helloworld/study/njai_challenge/cbct/inputs/data.hdf5"
-    train_generator(model_saved_path, h5_data_path, batch_size=1, epochs=10, model_trained=model_saved_path, gpus=1)
+    h5_data_path = "/home/jzhang/helloworld/mtcnn/cb/inputs/data.hdf5"
+    train_generator(model_saved_path, h5_data_path, batch_size=16, epochs=20, model_trained=None, gpus=1)
 
 
 if __name__ == '__main__':

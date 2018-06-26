@@ -10,6 +10,9 @@ from datetime import datetime
 import h5py
 import keras
 import numpy as np
+from keras import backend as K
+
+import tensorflow as tf
 
 IMG_H, IMG_W, IMG_C = 576, 576, 1
 
@@ -32,9 +35,13 @@ def get_input_data(f_obj, tmp_keys, transform, is_train):
     return images, labels
 
 
-def preprocess(inputs_array):
+def preprocess(inputs_array, mode="images"):
     images = inputs_array / 127.5
     images -= 1.
+    # images = inputs_array / 255
+    if mode == "mask":
+        images[images > 0.5] = 1
+        images[images <= 0.5] = 0
     return images
 
 
@@ -88,6 +95,50 @@ def preprocess(inputs_array):
 # global safe_next
 # safe_next = ThreadSafeIter()
 
+def mean_iou(y_true, y_pred):
+    prec = []
+    for t in np.arange(0.5, 1.0, 0.05):
+        y_pred_ = tf.to_int32(y_pred > t)
+        score, up_opt = tf.metrics.mean_iou(y_true, y_pred_, 2)
+        K.get_session().run(tf.local_variables_initializer())
+        with tf.control_dependencies([up_opt]):
+            score = tf.identity(score)
+        prec.append(score)
+    return K.mean(K.stack(prec), axis=0)
+
+
+class DataReader(keras.utils.Sequence):
+    def __init__(self, hdf5_path, batch_size, mode, shuffle=True):
+        self.f = h5py.File(hdf5_path, 'r')
+        self.batch_size = batch_size
+        self.mode = mode
+        self.shuffle = shuffle
+        assert self.mode in ['train', 'val']
+        if self.mode == "train":
+            keys = self.f["train_id"].value
+        elif mode == "val":
+            keys = self.f["val_id"].value
+        else:
+            # keys = self.f["test_id"].value
+            raise NotImplementedError
+        self.keys = [k.tostring().decode() for k in keys]
+        self.is_lock = threading.Lock()
+        self.images, self.labels = get_input_data(self.f, self.keys, transform=False, is_train=True)
+        self.images = preprocess(self.images)
+        self.labels = preprocess(self.labels, mode="mask")
+        print(mode, "images.shape: {}".format(self.images.shape))
+        print(mode, "labels.shape: {}".format(self.labels.shape))
+
+    def __len__(self):
+        return int(np.ceil(len(self.keys) / float(self.batch_size)))
+
+    def __getitem__(self, idx):
+        # 可能有Bug.
+        # if self.is_lock:
+        with self.is_lock:
+            batch_x, batch_y = self.images[idx], self.labels[idx]
+            return np.asarray(batch_x), np.asarray(batch_y)
+
 
 class DataGeneratorCustom(keras.utils.Sequence):
     def __init__(self, hdf5_path, batch_size, mode, shuffle=True):
@@ -121,7 +172,7 @@ class DataGeneratorCustom(keras.utils.Sequence):
                 tmp_keys = self.keys[step * self.batch_size: (step + 1) * self.batch_size]
                 images, labels = get_input_data(self.f, tmp_keys, transform=False, is_train=True)
                 images = preprocess(images)
-                labels = preprocess(labels)
+                labels = preprocess(labels, mode="mask")
                 yield images, labels
 
     def __len__(self):
