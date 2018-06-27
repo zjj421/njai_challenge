@@ -26,32 +26,17 @@ def data_analysis():
         im = Image.open(file_path)
         im = np.array(im, dtype=np.uint8)
         if len(im.shape) == 3:
-
-            # print(im[:, :, 0])
-            # print(im[:, :, 1])
-            # print(im[:, :, 2])
-            # print(im.shape)
-            r = im[:, :, 0] == im[:, :, 1]
-            r = r.flatten()
-            for i in r:
-                # print(i)
-                if i == True:
-                    print("dd")
-
-            # print(r.shape)
-
-            # print(im)
-            exit()
+            assert im[:, :, 0].all() == im[:, :, 1].all() and im[:, :, 0].all() == im[:, :, 2].all()
         train_shape.append(im.shape)
     for i, file_path in enumerate(label_file_path_lst):
         im = Image.open(file_path)
         im = np.array(im, dtype=np.uint8)
         label_shape.append(im.shape)
-    print(train_shape)
-    print(label_shape)
-    for i, s in enumerate(train_shape):
-        if s == (576, 576, 3):
-            print(train_file_path_lst[i])
+    print(set(train_shape))
+    print(set(label_shape))
+    # for i, s in enumerate(train_shape):
+    #     if s == (576, 576, 3):
+    #         print(train_file_path_lst[i])
 
 
 # deprecated
@@ -175,7 +160,7 @@ def generate_data_custom_test():
 def __main():
     # make_hdf5_database()
     # add_train_val_id_hdf5()
-    generate_data_custom_test()
+    data_analysis()
 
 
 if __name__ == '__main__':

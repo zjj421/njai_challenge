@@ -25,8 +25,8 @@ def gen_random_image():
     dark_color1 = random.randint(0, 100)
     dark_color2 = random.randint(0, 100)
     img[:, :, 0] = dark_color0
-    # img[:, :, 1] = dark_color1
-    # img[:, :, 2] = dark_color2
+    img[:, :, 1] = dark_color1
+    img[:, :, 2] = dark_color2
 
     # Object
     light_color0 = random.randint(dark_color0+1, 255)

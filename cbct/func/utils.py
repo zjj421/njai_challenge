@@ -35,13 +35,17 @@ def get_input_data(f_obj, tmp_keys, transform, is_train):
     return images, labels
 
 
-def preprocess(inputs_array, mode="images"):
+def preprocess(inputs_array, mode="images", input_channels=1):
     images = inputs_array / 127.5
     images -= 1.
     # images = inputs_array / 255
     if mode == "mask":
         images[images > 0.5] = 1
         images[images <= 0.5] = 0
+    else:
+        if input_channels == 3:
+            images = np.concatenate([images for i in range(input_channels)], axis=-1)
+            # print(images.shape)
     return images
 
 
@@ -107,9 +111,29 @@ def mean_iou(y_true, y_pred):
     return K.mean(K.stack(prec), axis=0)
 
 
+def prepare_all_data(hdf5_data_path, mode):
+    f = h5py.File(hdf5_data_path, 'r')
+    assert mode in ['train', 'val']
+    if mode == "train":
+        keys = f["train_id"].value
+    elif mode == "val":
+        keys = f["val_id"].value
+    else:
+        # keys = self.f["test_id"].value
+        raise NotImplementedError
+    keys = [k.tostring().decode() for k in keys]
+    images, labels = get_input_data(f, keys, transform=False, is_train=True)
+    images = preprocess(images, mode="images", input_channels=1)
+    labels = preprocess(labels, mode="mask")
+    print(mode, "images.shape: {}".format(images.shape))
+    print(mode, "labels.shape: {}".format(labels.shape))
+    return images, labels
+
+
+# deprecated
 class DataReader(keras.utils.Sequence):
-    def __init__(self, hdf5_path, batch_size, mode, shuffle=True):
-        self.f = h5py.File(hdf5_path, 'r')
+    def __init__(self, hdf5_data_path, batch_size, mode, shuffle=True):
+        self.f = h5py.File(hdf5_data_path, 'r')
         self.batch_size = batch_size
         self.mode = mode
         self.shuffle = shuffle
@@ -124,7 +148,7 @@ class DataReader(keras.utils.Sequence):
         self.keys = [k.tostring().decode() for k in keys]
         self.is_lock = threading.Lock()
         self.images, self.labels = get_input_data(self.f, self.keys, transform=False, is_train=True)
-        self.images = preprocess(self.images)
+        self.images = preprocess(self.images, mode="images", input_channels=1)
         self.labels = preprocess(self.labels, mode="mask")
         print(mode, "images.shape: {}".format(self.images.shape))
         print(mode, "labels.shape: {}".format(self.labels.shape))
@@ -134,7 +158,6 @@ class DataReader(keras.utils.Sequence):
 
     def __getitem__(self, idx):
         # 可能有Bug.
-        # if self.is_lock:
         with self.is_lock:
             batch_x, batch_y = self.images[idx], self.labels[idx]
             return np.asarray(batch_x), np.asarray(batch_y)

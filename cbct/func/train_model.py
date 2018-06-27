@@ -22,6 +22,7 @@ from keras_applications.mobilenet import relu6
 
 from func.model import unet, unet_keras, unet_kaggle
 from func.utils import DataGeneratorCustom, DataReader, IMG_C, IMG_W, IMG_H, mean_iou
+from zf_unet_576_model import ZF_UNET_576, dice_coef, dice_coef_loss
 
 
 class Multi_Gpu_Cbk(keras.callbacks.Callback):
@@ -37,7 +38,7 @@ class Multi_Gpu_Cbk(keras.callbacks.Callback):
 
 
 def train_generator(model_saved_path, h5_data_path, batch_size, epochs, model_trained, gpus=1):
-    opt = Adam(lr=1e-2)
+    opt = Adam(lr=1e-3)
     es = EarlyStopping('val_acc', patience=30, mode="auto", min_delta=0.0)
     reduce_lr = ReduceLROnPlateau(monitor='val_acc', factor=0.1, patience=20, verbose=2, epsilon=1e-4,
                                   mode='auto')
@@ -45,7 +46,9 @@ def train_generator(model_saved_path, h5_data_path, batch_size, epochs, model_tr
     if model_trained:
         with CustomObjectScope({'relu6': relu6,
                                 'DepthwiseConv2D': DepthwiseConv2D}):
-            model = load_model(model_trained)
+            model = ZF_UNET_576()
+            model.load_weights(model_trained)
+            # model = load_model(model_trained)
             # len_ = len(model.layers)
             # print("layers:", len_)
             # print(model.layers[-3].name)
@@ -109,7 +112,8 @@ def train_generator(model_saved_path, h5_data_path, batch_size, epochs, model_tr
 
     else:
 
-        model.compile(optimizer=opt, loss='binary_crossentropy', metrics=["acc", mean_iou])
+        # model.compile(optimizer=opt, loss='binary_crossentropy', metrics=["acc", mean_iou])
+        model.compile(optimizer=opt, loss=dice_coef_loss, metrics=["acc", dice_coef])
         # model.compile(optimizer=opt, loss='binary_crossentropy', metrics=["acc"])
         model.summary()
         cbk1 = ModelCheckpoint(model_saved_path, save_best_only=True, monitor='val_acc', mode='max')
@@ -141,13 +145,14 @@ def train_generator(model_saved_path, h5_data_path, batch_size, epochs, model_tr
 def __main():
     model_saved_path = "model.h5"
     h5_data_path = "/home/jzhang/helloworld/mtcnn/cb/inputs/data.hdf5"
-    train_generator(model_saved_path, h5_data_path, batch_size=16, epochs=20, model_trained=None, gpus=1)
+    # model_trained = "/home/jzhang/helloworld/mtcnn/cb/inputs/unet_576.h5"
+    train_generator(model_saved_path, h5_data_path, batch_size=4, epochs=60, model_trained=model_saved_path, gpus=1)
 
 
 if __name__ == '__main__':
     start = datetime.now()
     print("Start time is {}".format(start))
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "2"
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
     sess = tf.Session(config=config)
