@@ -12,11 +12,60 @@ import numpy as np
 from PIL import Image
 
 from cbct.func.utils import DataGeneratorCustom
+from module.utils_public import apply_mask
+from matplotlib import pyplot as plt
+import scipy.misc
+
+
+def show_image():
+    np.set_printoptions(threshold=np.nan)
+    image_path = "/media/zj/share/data/njai_2018/cbct/train/001.tif"
+    mask_path = "/media/zj/share/data/njai_2018/cbct/label/001.tif"
+    # color = np.random.rand(3)
+    color = [0, 191, 255]
+    print(color)
+    image = Image.open(image_path)
+    image = np.array(image)
+    mask = Image.open(mask_path)
+    mask = np.array(mask)
+    mask = mask[:, :, 0]
+    print(image.shape)
+    print(mask.shape)
+    mask_image = apply_mask(image, mask, color, alpha=0.5)
+    image = np.concatenate([image, mask_image], axis=1)
+    plt.imshow(image)
+    plt.show()
+    # scipy.misc.toimage(image, cmin=0.0, cmax=...).save('outfile.jpg')
+
+
+def save_mask_image():
+    data_dir = "/media/zj/share/data/njai_2018/cbct"
+    images_dir = os.path.join(data_dir, "train")
+    masks_dir = os.path.join(data_dir, "label")
+    mask_image_dir = os.path.join(data_dir, "mask_image")
+    if not os.path.isdir(mask_image_dir):
+        os.makedirs(mask_image_dir)
+    basename_lst = next(os.walk(images_dir))[2]
+    color = [0, 191, 255]
+    alpha = 0.5
+    for basename in basename_lst:
+        image = Image.open(os.path.join(images_dir, basename))
+        image = np.array(image)
+        if len(image.shape) == 2:
+            image = np.concatenate([np.expand_dims(image, axis=-1) for i in range(3)], axis=-1)
+        mask = Image.open(os.path.join(masks_dir, basename))
+        mask = np.array(mask)
+        if len(mask.shape) == 3:
+            assert mask[:, :, 0].all() == mask[:, :, 1].all() and mask[:, :, 0].all() == mask[:, :, 2].all()
+            mask = mask[:, :, 0]
+        mask_image = apply_mask(image, mask, color, alpha=alpha)
+        image2 = np.concatenate([image, mask_image], axis=1)
+        scipy.misc.toimage(image2, cmin=0.0, cmax=...).save(os.path.join(mask_image_dir, basename))
 
 
 def data_analysis():
     np.set_printoptions(threshold=np.nan)
-    data_root = "/media/topsky/HHH/jzhang_root/data/njai/cbct"
+    data_root = "/media/zj/share/data/njai_2018/cbct"
     file_basename_lst = next(os.walk(os.path.join(data_root, "train")))[2]
     train_file_path_lst = [os.path.join(data_root, "train", x) for x in file_basename_lst]
     label_file_path_lst = [os.path.join(data_root, "label", x) for x in file_basename_lst]
@@ -26,6 +75,7 @@ def data_analysis():
         im = Image.open(file_path)
         im = np.array(im, dtype=np.uint8)
         if len(im.shape) == 3:
+            print(file_path)
             assert im[:, :, 0].all() == im[:, :, 1].all() and im[:, :, 0].all() == im[:, :, 2].all()
         train_shape.append(im.shape)
     for i, file_path in enumerate(label_file_path_lst):
@@ -160,7 +210,8 @@ def generate_data_custom_test():
 def __main():
     # make_hdf5_database()
     # add_train_val_id_hdf5()
-    data_analysis()
+    save_mask_image()
+    # show_image()
 
 
 if __name__ == '__main__':
