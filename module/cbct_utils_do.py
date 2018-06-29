@@ -3,10 +3,12 @@
 # Created by zjj421 on 18-6-20
 # Task: 
 # Insights:
-
+import glob
 import os
+import subprocess
 from datetime import datetime
 
+import cv2
 import h5py
 import numpy as np
 from PIL import Image
@@ -38,11 +40,31 @@ def show_image():
     # scipy.misc.toimage(image, cmin=0.0, cmax=...).save('outfile.jpg')
 
 
+def save_labelme2_mask():
+    labelme_mask_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/mask_image_1"
+    json_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/gum_json"
+    new_mask_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/gum_mask"
+    if not os.path.isdir(json_dir):
+        os.makedirs(json_dir)
+    if not os.path.isdir(new_mask_dir):
+        os.makedirs(new_mask_dir)
+
+    json_lst = glob.glob(os.path.join(labelme_mask_dir, "*.json"))
+    for jsonfile in json_lst:
+        basename = os.path.splitext(os.path.basename(jsonfile))[0]
+        dst_dir = os.path.join(json_dir, basename + "_json")
+        if not os.path.isdir(dst_dir):
+            shell = "/home/topsky/anaconda3/bin/labelme_json_to_dataset {} -o {}".format(jsonfile, dst_dir)
+            subprocess.run(shell, shell=True)
+        label_png = np.array(Image.open(os.path.join(dst_dir, "label.png")))
+        scipy.misc.imsave(os.path.join(new_mask_dir, basename + ".tif"), label_png)
+
+
 def save_mask_image():
-    data_dir = "/media/zj/share/data/njai_2018/cbct"
+    data_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct"
     images_dir = os.path.join(data_dir, "train")
     masks_dir = os.path.join(data_dir, "label")
-    mask_image_dir = os.path.join(data_dir, "mask_image")
+    mask_image_dir = os.path.join(data_dir, "mask_image_1")
     if not os.path.isdir(mask_image_dir):
         os.makedirs(mask_image_dir)
     basename_lst = next(os.walk(images_dir))[2]
@@ -59,8 +81,8 @@ def save_mask_image():
             assert mask[:, :, 0].all() == mask[:, :, 1].all() and mask[:, :, 0].all() == mask[:, :, 2].all()
             mask = mask[:, :, 0]
         mask_image = apply_mask(image, mask, color, alpha=alpha)
-        image2 = np.concatenate([image, mask_image], axis=1)
-        scipy.misc.toimage(image2, cmin=0.0, cmax=...).save(os.path.join(mask_image_dir, basename))
+        # image2 = np.concatenate([image, mask_image], axis=1)
+        scipy.misc.toimage(mask_image, cmin=0.0, cmax=...).save(os.path.join(mask_image_dir, basename))
 
 
 def data_analysis():
@@ -210,8 +232,9 @@ def generate_data_custom_test():
 def __main():
     # make_hdf5_database()
     # add_train_val_id_hdf5()
-    save_mask_image()
+    # save_mask_image()
     # show_image()
+    save_labelme2_mask()
 
 
 if __name__ == '__main__':
