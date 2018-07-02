@@ -8,34 +8,25 @@ from datetime import datetime
 
 import numpy as np
 
-from func.utils import DataReader
+from func.utils import prepare_all_data
 
 
 def check_baseline_accuracy():
     h5_data_path = "/home/jzhang/helloworld/mtcnn/cb/inputs/data.hdf5"
-    data_val = DataReader(h5_data_path, batch_size=None, mode="train", shuffle=True)
-    x_val, y_val = data_val.images, data_val.labels
+    x, y = prepare_all_data(h5_data_path, mode="val")
     nb_correct = 0
-    gts = y_val
+    gts = y
     ests = np.zeros(gts.shape)
-    print("hha")
-    print(ests.shape)
-    print(gts.shape)
     res = gts == ests
     res = res.flatten()
-    print(res)
     for r in res:
         if r == True:
             nb_correct += 1
-    print(len(res))
-    print(nb_correct)
-    print(nb_correct / len(res))
-
-    # return acc / (num_batches * batch_size)
+    print("Base line acc: {} / {} = {}".format(nb_correct, len(res), nb_correct / len(res)))
 
 
 def __main():
-    pass
+    check_baseline_accuracy()
 
 
 if __name__ == '__main__':

@@ -2,6 +2,7 @@
 '''
     - train "ZF_UNET_576" CNN with random images
 '''
+from func.model import unet_kaggle
 
 __author__ = 'ZFTurbo: https://kaggle.com/zfturbo'
 
@@ -70,13 +71,13 @@ def batch_generator(batch_size):
 
 
 def train_unet():
-    out_model_path = 'zf_unet_576.h5'
+    out_model_path = ''
     epochs = 200
     patience = 20
     batch_size = 4
     optim_type = 'SGD'
     learning_rate = 0.001
-    model = ZF_UNET_576()
+    model = unet_kaggle()
     model.summary()
     if os.path.isfile(out_model_path):
         model.load_weights(out_model_path)

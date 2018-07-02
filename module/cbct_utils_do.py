@@ -8,41 +8,26 @@ import os
 import subprocess
 from datetime import datetime
 
-import cv2
 import h5py
 import numpy as np
+import scipy.misc
 from PIL import Image
 
 from cbct.func.utils import DataGeneratorCustom
 from module.utils_public import apply_mask
-from matplotlib import pyplot as plt
-import scipy.misc
-
-
-def show_image():
-    np.set_printoptions(threshold=np.nan)
-    image_path = "/media/zj/share/data/njai_2018/cbct/train/001.tif"
-    mask_path = "/media/zj/share/data/njai_2018/cbct/label/001.tif"
-    # color = np.random.rand(3)
-    color = [0, 191, 255]
-    print(color)
-    image = Image.open(image_path)
-    image = np.array(image)
-    mask = Image.open(mask_path)
-    mask = np.array(mask)
-    mask = mask[:, :, 0]
-    print(image.shape)
-    print(mask.shape)
-    mask_image = apply_mask(image, mask, color, alpha=0.5)
-    image = np.concatenate([image, mask_image], axis=1)
-    plt.imshow(image)
-    plt.show()
-    # scipy.misc.toimage(image, cmin=0.0, cmax=...).save('outfile.jpg')
 
 
 def save_labelme2_mask():
+    """
+    把labelme工具制作的标注数据转换为mask.
+    Returns:
+
+    """
+    # .json文件所在的目录。
     labelme_mask_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/mask_image_1"
+    # labelme_json_to_dataset转换的结果保存目录。
     json_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/gum_json"
+    # 新生成的mask保存的目录。
     new_mask_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/gum_mask"
     if not os.path.isdir(json_dir):
         os.makedirs(json_dir)
@@ -61,9 +46,15 @@ def save_labelme2_mask():
 
 
 def save_mask_image():
+    """
+    合并image与mask并保存。
+    Returns:
+
+    """
     data_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct"
     images_dir = os.path.join(data_dir, "train")
     masks_dir = os.path.join(data_dir, "label")
+    # 新合并图的保存路径。
     mask_image_dir = os.path.join(data_dir, "mask_image_1")
     if not os.path.isdir(mask_image_dir):
         os.makedirs(mask_image_dir)
@@ -81,108 +72,53 @@ def save_mask_image():
             assert mask[:, :, 0].all() == mask[:, :, 1].all() and mask[:, :, 0].all() == mask[:, :, 2].all()
             mask = mask[:, :, 0]
         mask_image = apply_mask(image, mask, color, alpha=alpha)
-        # image2 = np.concatenate([image, mask_image], axis=1)
+        # mask_image是否与image一起显示。
+        # mask_image = np.concatenate([image, mask_image], axis=1)
         scipy.misc.toimage(mask_image, cmin=0.0, cmax=...).save(os.path.join(mask_image_dir, basename))
 
 
-def data_analysis():
-    np.set_printoptions(threshold=np.nan)
-    data_root = "/media/zj/share/data/njai_2018/cbct"
-    file_basename_lst = next(os.walk(os.path.join(data_root, "train")))[2]
-    train_file_path_lst = [os.path.join(data_root, "train", x) for x in file_basename_lst]
-    label_file_path_lst = [os.path.join(data_root, "label", x) for x in file_basename_lst]
-    train_shape = []
-    label_shape = []
-    for i, file_path in enumerate(train_file_path_lst):
-        im = Image.open(file_path)
-        im = np.array(im, dtype=np.uint8)
-        if len(im.shape) == 3:
-            print(file_path)
-            assert im[:, :, 0].all() == im[:, :, 1].all() and im[:, :, 0].all() == im[:, :, 2].all()
-        train_shape.append(im.shape)
-    for i, file_path in enumerate(label_file_path_lst):
-        im = Image.open(file_path)
-        im = np.array(im, dtype=np.uint8)
-        label_shape.append(im.shape)
-    print(set(train_shape))
-    print(set(label_shape))
-    # for i, s in enumerate(train_shape):
-    #     if s == (576, 576, 3):
-    #         print(train_file_path_lst[i])
-
-
-# deprecated
-# def make_database():
-#     data_root = "/media/topsky/HHH/jzhang_root/data/njai/cbct"
-#     lmdb_x_path = "/home/topsky/helloworld/study/njai_challenge/cbct/inputs/train_lmdb_x"
-#     lmdb_y_path = "/home/topsky/helloworld/study/njai_challenge/cbct/inputs/train_lmdb_y"
-#     lmdb_x = LMDB(lmdb_x_path)
-#     lmdb_y = LMDB(lmdb_y_path)
-#     file_basename_lst = next(os.walk(os.path.join(data_root, "train")))[2]
-#     train_file_path_lst = [os.path.join(data_root, "train", x) for x in file_basename_lst]
-#     label_file_path_lst = [os.path.join(data_root, "label", x) for x in file_basename_lst]
-#     images = []
-#     labels = []
-#     # write images
-#     for i, file_path in enumerate(train_file_path_lst):
-#         im = Image.open(file_path)
-#         im = np.array(im, dtype=np.uint8)
-#         if len(im.shape) == 3:
-#             im = im[:, :, 0]
-#         im = np.expand_dims(im, axis=2)
-#         images.append(im)
-#         if i % 10 == 0 and i > 0:
-#             print("loading images... ", i)
-#         if i % 10 == 0 and i > 0:
-#             lmdb_x.write(images, None, None, "images")
-#             images.clear()
-#             print("images clear")
-#     lmdb_x.write(images, None, None, "images")
-#     # write labels
-#     print("-" * 100)
-#     for i, file_path in enumerate(label_file_path_lst):
-#         im = Image.open(file_path)
-#         im = np.array(im, dtype=np.uint8)
-#         if len(im.shape) == 3:
-#             im = im[:, :, 0]
-#         im = np.expand_dims(im, axis=2)
-#         labels.append(im)
-#         if i % 10 == 0 and i > 0:
-#             print("loading images... ", i)
-#         if i % 10 == 0 and i > 0:
-#             lmdb_y.write(labels, None, None, "images")
-#             labels.clear()
-#             print("images clear")
-#     lmdb_y.write(labels, None, None, "images")
-#     print(lmdb_x.count())
-#     print(lmdb_y.count())
-
 
 def make_hdf5_database():
+    """
+    将image与mask保存在hdf5数据库里。
+    Returns:
+
+    """
     data_root = "/media/topsky/HHH/jzhang_root/data/njai/cbct"
     hdf5_path = "/home/topsky/helloworld/study/njai_challenge/cbct/inputs/data.hdf5"
     f = h5py.File(hdf5_path, "w")
     grp_x = f.create_group("images")
-    grp_y = f.create_group("labels")
+    grp_y_1 = f.create_group("mask_1")
+    grp_y_2 = f.create_group("mask_2")
     file_basename_lst = next(os.walk(os.path.join(data_root, "train")))[2]
-    train_file_path_lst = [os.path.join(data_root, "train", x) for x in file_basename_lst]
-    label_file_path_lst = [os.path.join(data_root, "label", x) for x in file_basename_lst]
+    image_file_path_lst = [os.path.join(data_root, "train", x) for x in file_basename_lst]
+    mask_1_file_path_lst = [os.path.join(data_root, "label", x) for x in file_basename_lst]
+    mask_2_file_path_lst = [os.path.join(data_root, "gum_mask", x) for x in file_basename_lst]
 
     for i in range(len(file_basename_lst)):
         idx = '{:08}'.format(i + 1)
-        image = Image.open(train_file_path_lst[i])
+        # 保存image,原样保存。
+        image = Image.open(image_file_path_lst[i])
         image = np.array(image, dtype=np.uint8)
-        if len(image.shape) == 3:
-            image = image[:, :, 0]
+        # if len(image.shape) == 3:
+        #     image = image[:, :, 0]
         grp_x.create_dataset(idx, dtype=np.uint8, data=image)  # [0, 255]
-
-        label = Image.open(label_file_path_lst[i])
-        label = np.array(label, dtype=np.uint8)
-        if len(label.shape) == 3:
-            label = label[:, :, 0]
-        grp_y.create_dataset(idx, dtype=np.uint8, data=label)
+        # 保存mask_tooth_root,如果通道数不是１,则只保存通道１的图片。
+        mask_1 = Image.open(mask_1_file_path_lst[i])
+        mask_1 = np.array(mask_1, dtype=np.uint8)
+        if len(mask_1.shape) == 3:
+            mask_1 = mask_1[:, :, 0]
+        mask_1 = np.expand_dims(mask_1, -1)
+        grp_y_1.create_dataset(idx, dtype=np.uint8, data=mask_1)
+        # 保存mask_gum,如果通道数不是１,则只保存通道１的图片。
+        mask_2 = Image.open(mask_2_file_path_lst[i])
+        mask_2 = np.array(mask_2, dtype=np.uint8)
+        if len(mask_2.shape) == 3:
+            mask_2 = mask_2[:, :, 0]
+        mask_2 = np.expand_dims(mask_2, -1)
+        grp_y_2.create_dataset(idx, dtype=np.uint8, data=mask_2)
         if i % 10 == 0:
-            print("loading images and labels... ", i)
+            print("Saving images and labels ... ", i)
 
 
 def add_train_val_id_hdf5():
@@ -201,7 +137,7 @@ def add_train_val_id_hdf5():
     print(type(keys[0]))
     np.random.shuffle(keys)
     print(keys)
-    split = int(len(keys) * 0.8)
+    split = int(len(keys) * 0.9)
     for name in f:
         print(name)
     f.create_dataset("train_id", data=keys[:split])
@@ -230,11 +166,11 @@ def generate_data_custom_test():
 
 
 def __main():
-    # make_hdf5_database()
-    # add_train_val_id_hdf5()
+    make_hdf5_database()
+    add_train_val_id_hdf5()
     # save_mask_image()
     # show_image()
-    save_labelme2_mask()
+    # save_labelme2_mask()
 
 
 if __name__ == '__main__':
