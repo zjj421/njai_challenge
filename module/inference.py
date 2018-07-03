@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # Created by zjj421 on 18-6-21
 # Task:
@@ -7,6 +7,7 @@ import os
 from datetime import datetime
 
 import numpy as np
+import scipy.misc
 from PIL import Image
 from keras.models import load_model
 from matplotlib import pyplot as plt
@@ -26,23 +27,37 @@ class ModelDeployment(object):
         model.summary()
         self.model = model
 
-    def _read_image(self, image_path):
-        img = Image.open(image_path)
-        img = np.array(img)
-        if len(img.shape) == 3:
-            img = img[:, :, 0]
-        img = np.expand_dims(img, -1)
-        return img
+    def read_images(self, image_path_lst):
+        imgs = []
+        for image_path in image_path_lst:
+            img = Image.open(image_path)
+            img = np.array(img)
+            if len(img.shape) == 3:
+                img = img[:, :, 0]
+            img = np.expand_dims(img, -1)
+            imgs.append(img)
+        return np.array(imgs)
 
-    def predict(self, image_path):
-        img = self._read_image(image_path)
-        input_ = img.copy()
-        img = preprocess(img, mode="image")
-        # print(np.squeeze(img, -1))
-        img = np.expand_dims(img, axis=0)
-        outputs = self.model.predict_on_batch(img)
-        return input_, outputs[0]
+    def predict(self, images, batch_size):
+        images = preprocess(images, mode="image")
+        outputs = self.model.predict(images, batch_size)
+        return outputs
 
+    def predict_and_save_image_masks(self, image_path_lst, save_dir, batch_size=32, color=None, alpha=0.5):
+        images = self.read_images(image_path_lst)
+        images = [np.concatenate([image for i in range(3)], axis=-1) for image in images]
+        masks = self.predict(images, batch_size)
+        masks = [np.squeeze(mask, -1) for mask in masks]
+        if color is None:
+            color = [0, 191, 255]
+        image_masks = [apply_mask(image, mask, color, alpha) for image, mask in zip(images, masks)]
+        dst_image_path_lst = [os.path.join(save_dir, os.path.basename(x)) for x in image_path_lst]
+        if not os.path.isdir(save_dir):
+            os.makedirs(save_dir)
+        for i in range(len(image_masks)):
+            scipy.misc.toimage(image_masks[i], cmin=0.0, cmax=...).save(dst_image_path_lst[i])
+
+    # no test
     @staticmethod
     def show_image(**kw):
         assert "image" in kw.keys()

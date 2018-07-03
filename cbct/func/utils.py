@@ -43,6 +43,7 @@ def get_input_data(f_obj, tmp_keys, transform, is_train):
 
 
 def preprocess(inputs_array, mode="mask"):
+
     images = inputs_array / 127.5
     images -= 1.
     # images = inputs_array / 255
