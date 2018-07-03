@@ -11,6 +11,14 @@ from datetime import datetime
 def apply_mask(image, mask, color, alpha=0.5):
     """
     Apply the given mask to the image.
+    Args:
+        image: 3-d numpy array, (h, w, c).
+        mask: 2-d numpy array, (h, w).
+        color: 3 item list, ie. [0, 191, 255].
+        alpha: float, range from 0 to 1.
+
+    Returns: 3-d numpy array.
+
     """
     mask_image = image.copy()
     for c in range(3):

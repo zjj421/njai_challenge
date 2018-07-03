@@ -123,9 +123,6 @@ class DataGeneratorCustom(keras.utils.Sequence):
         return int(np.ceil(len(self.keys) / float(self.batch_size)))
 
     def __getitem__(self, idx):
-        # 可能有Bug.
-        # if self.is_lock:
-
         with self.is_lock:
             batch_x, batch_y = next(self.gen)
             return np.asarray(batch_x), np.asarray(batch_y)

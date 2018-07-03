@@ -9,8 +9,8 @@ from keras import Input, Model
 from keras.layers import Conv2D, MaxPooling2D, Dropout, UpSampling2D, Concatenate, Conv2DTranspose, concatenate
 from keras.optimizers import Adam
 
-from func.utils import IMG_H, IMG_W, IMG_C
-# from cbct.func.utils import IMG_C, IMG_W, IMG_H
+# from func.utils import IMG_H, IMG_W, IMG_C
+from cbct.func.utils import IMG_C, IMG_W, IMG_H
 
 
 def unet():

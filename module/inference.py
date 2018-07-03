@@ -6,67 +6,83 @@
 import os
 from datetime import datetime
 
-from keras.models import load_model
 import numpy as np
-
+from PIL import Image
+from keras.models import load_model
 from matplotlib import pyplot as plt
 
 from cbct.func.model import unet_kaggle
-from cbct.func.utils import prepare_all_data
-from cbct.zf_unet_576_model import dice_coef_loss, dice_coef
+from cbct.func.utils import preprocess
+from module.utils_public import apply_mask
 
 
-def inference():
+class ModelDeployment(object):
+    def __init__(self, model_def, model_trained):
+        try:
+            model = load_model(model_trained)
+        except:
+            model = model_def()
+            model.load_weights(model_trained)
+        model.summary()
+        self.model = model
+
+    def _read_image(self, image_path):
+        img = Image.open(image_path)
+        img = np.array(img)
+        if len(img.shape) == 3:
+            img = img[:, :, 0]
+        img = np.expand_dims(img, -1)
+        return img
+
+    def predict(self, image_path):
+        img = self._read_image(image_path)
+        input_ = img.copy()
+        img = preprocess(img, mode="image")
+        # print(np.squeeze(img, -1))
+        img = np.expand_dims(img, axis=0)
+        outputs = self.model.predict_on_batch(img)
+        return input_, outputs[0]
+
+    @staticmethod
+    def show_image(**kw):
+        assert "image" in kw.keys()
+        mask = None
+        image = kw["image"]
+        assert len(image.shape) == 3, "Image should be 3-d array."
+        if "mask" in kw.keys():
+            mask = kw["mask"]
+            assert len(mask.shape) == 2, "Mask should be 2-d array."
+        if mask is not None:
+            print("fff")
+            color = [0, 191, 255]
+            image = apply_mask(image, mask, color, alpha=0.5)
+        plt.figure()
+        plt.imshow(image)
+        plt.show()
+
+
+def infer_do():
     model_path = "/home/topsky/helloworld/study/njai_challenge/cbct/func/model.h5"
-    # model_path = "/home/topsky/helloworld/study/unet/unet_membrane.hdf5"
-    h5_data_path = "/home/topsky/helloworld/study/njai_challenge/cbct/inputs/data.hdf5"
-    model = unet_kaggle()
-    model.load_weights(model_path)
-    # model = load_model(model_path)
-    model.compile(optimizer="adam", loss=dice_coef_loss, metrics=["acc", dice_coef])
-    model.summary()
-    x_val, y_val = prepare_all_data(h5_data_path, mode="val")
-    print(x_val.shape, y_val)
-
-    idx = 6
-    outputs = model.predict_on_batch(np.expand_dims(x_val[idx], axis=0))
-    pred = np.squeeze(outputs, axis=0)
-    mask_1 = pred[:, :, 0]
-    mask_2 = pred[:, :, 1]
-    gt = y_val[idx][0]
-    image = x_val[idx]
-
-    plt.figure()
-    plt.subplot(2, 2, 1)
-    plt.imshow(image, cmap='gray')
-    plt.axis("off")
-    plt.title("train_image")
-
-    plt.subplot(2, 2, 2)
-    plt.imshow(gt, cmap='gray')
-    plt.axis("off")
-    plt.title("gt")
-
-    plt.subplot(2, 2, 3)
-    plt.imshow(mask_1, cmap='gray')
-    plt.axis("off")
-    plt.title("mask_1")
-
-    plt.subplot(2, 2, 4)
-    plt.imshow(mask_2, cmap='gray')
-    plt.axis("off")
-    plt.title("mask_2")
-
-    plt.show()
+    model = ModelDeployment(unet_kaggle, model_path)
+    image_path = "/media/topsky/HHH/jzhang_root/data/njai/cbct/train/002.tif"
+    image, pred = model.predict(image_path)
+    pred *= 255
+    image = np.concatenate([image for i in range(3)], axis=-1)
+    pred = np.squeeze(pred, axis=-1)
+    # pred = np.concatenate([pred for i in range(3)], axis=-1)
+    print(image.shape)
+    print(pred.shape)
+    kw = {"image": image, "mask": pred}
+    model.show_image(**kw)
 
 
 def __main():
     np.set_printoptions(threshold=np.inf)
-    inference()
+    infer_do()
 
 
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
     start = datetime.now()
     print("Start time is {}".format(start))

@@ -13,15 +13,18 @@ from func.utils import prepare_all_data
 
 def check_baseline_accuracy():
     h5_data_path = "/home/jzhang/helloworld/mtcnn/cb/inputs/data.hdf5"
-    x, y = prepare_all_data(h5_data_path, mode="val")
+    x, y = prepare_all_data(h5_data_path, mode="train")
     nb_correct = 0
     gts = y
     ests = np.zeros(gts.shape)
     res = gts == ests
     res = res.flatten()
     for r in res:
+        # can not use 'r is True' here.
         if r == True:
             nb_correct += 1
+    # 10 samples, val acc: 0.9489459755979939
+    # 90 samples, train acc: 0.9565696266289437
     print("Base line acc: {} / {} = {}".format(nb_correct, len(res), nb_correct / len(res)))
 
 

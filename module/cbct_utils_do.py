@@ -13,7 +13,6 @@ import numpy as np
 import scipy.misc
 from PIL import Image
 
-from cbct.func.utils import DataGeneratorCustom
 from module.utils_public import apply_mask
 
 
@@ -75,7 +74,6 @@ def save_mask_image():
         # mask_image是否与image一起显示。
         # mask_image = np.concatenate([image, mask_image], axis=1)
         scipy.misc.toimage(mask_image, cmin=0.0, cmax=...).save(os.path.join(mask_image_dir, basename))
-
 
 
 def make_hdf5_database():
@@ -149,28 +147,13 @@ def add_train_val_id_hdf5():
     f.close()
 
 
-def generate_data_custom_test():
-    hdf5_path = "/home/topsky/helloworld/study/njai_challenge/cbct/inputs/data.hdf5"
-    # gen = Data_Generator(hdf5_path, 8)
-    f = DataGeneratorCustom(hdf5_path, 8, mode="train")
-    g = f.gen.itt
-    print(len(f))
-    print(type(f))
-    for i in range(2):
-        # print(len(images) == len(labels))
-        # print(len(images))
-        images, labels = next(g)
-        print(len(images))
-        print(images[0].shape)
-        # print(labels[0].shape)
-
-
 def __main():
-    make_hdf5_database()
-    add_train_val_id_hdf5()
+    # make_hdf5_database()
+    # add_train_val_id_hdf5()
     # save_mask_image()
     # show_image()
     # save_labelme2_mask()
+    pass
 
 
 if __name__ == '__main__':
