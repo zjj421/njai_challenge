@@ -28,11 +28,11 @@ def get_input_data(f_obj, tmp_keys, transform, is_train):
             image = transform(image, seed=1)
         images.append(image)
         if is_train:
-            # label_1 = f_obj["mask_1"][key].value
+            label_1 = f_obj["mask_1"][key].value
             label_2 = f_obj["mask_2"][key].value
-            labels.append(label_2)
-            # label = np.concatenate([label_1, label_2], 2)
-            # labels.append(label)
+            # labels.append(label_2)
+            label = np.concatenate([label_1, label_2], 2)
+            labels.append(label)
     images = np.asarray(images)
     images = np.expand_dims(images, axis=-1)
     if is_train:
@@ -73,6 +73,34 @@ def prepare_all_data(h5_data_path, mode):
 
 
 def mean_iou(y_true, y_pred):
+    prec = []
+    for t in np.arange(0.5, 1.0, 0.05):
+        y_pred_ = tf.to_int32(y_pred > t)
+        score, up_opt = tf.metrics.mean_iou(y_true, y_pred_, 2)
+        K.get_session().run(tf.local_variables_initializer())
+        with tf.control_dependencies([up_opt]):
+            score = tf.identity(score)
+        prec.append(score)
+    return K.mean(K.stack(prec), axis=0)
+
+
+def mean_iou_ch0(y_true, y_pred):
+    y_true = y_true[..., 0]
+    y_pred = y_pred[..., 0]
+    prec = []
+    for t in np.arange(0.5, 1.0, 0.05):
+        y_pred_ = tf.to_int32(y_pred > t)
+        score, up_opt = tf.metrics.mean_iou(y_true, y_pred_, 2)
+        K.get_session().run(tf.local_variables_initializer())
+        with tf.control_dependencies([up_opt]):
+            score = tf.identity(score)
+        prec.append(score)
+    return K.mean(K.stack(prec), axis=0)
+
+
+def mean_iou_ch1(y_true, y_pred):
+    y_true = y_true[..., 1]
+    y_pred = y_pred[..., 1]
     prec = []
     for t in np.arange(0.5, 1.0, 0.05):
         y_pred_ = tf.to_int32(y_pred > t)

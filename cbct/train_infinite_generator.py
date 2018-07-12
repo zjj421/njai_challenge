@@ -2,7 +2,8 @@
 '''
     - train "ZF_UNET_576" CNN with random images
 '''
-from func.model import unet_kaggle
+from func.model import unet
+from func.utils import preprocess
 
 __author__ = 'ZFTurbo: https://kaggle.com/zfturbo'
 
@@ -12,7 +13,7 @@ import random
 import numpy as np
 import pandas as pd
 from keras.optimizers import Adam, SGD
-from keras.callbacks import ModelCheckpoint, EarlyStopping, ReduceLROnPlateau
+from keras.callbacks import ModelCheckpoint, ReduceLROnPlateau
 from keras import __version__
 from zf_unet_576_model import *
 
@@ -30,9 +31,9 @@ def gen_random_image():
     img[:, :, 2] = dark_color2
 
     # Object
-    light_color0 = random.randint(dark_color0+1, 255)
-    light_color1 = random.randint(dark_color1+1, 255)
-    light_color2 = random.randint(dark_color2+1, 255)
+    light_color0 = random.randint(dark_color0 + 1, 255)
+    light_color1 = random.randint(dark_color1 + 1, 255)
+    light_color2 = random.randint(dark_color2 + 1, 255)
     center_0 = random.randint(0, 576)
     center_1 = random.randint(0, 576)
     r1 = random.randint(10, 56)
@@ -58,16 +59,19 @@ def batch_generator(batch_size):
         mask_list = []
         for i in range(batch_size):
             img, mask = gen_random_image()
+            if len(img.shape) == 3:
+                img = img[:, :, 0]
+            img = np.expand_dims(img, -1)
             image_list.append(img)
+            if len(mask.shape) == 2:
+                mask = np.expand_dims(mask, -1)
             mask_list.append([mask])
 
-        image_list = np.array(image_list, dtype=np.float32)
-        if K.image_dim_ordering() == 'th':
-            image_list = image_list.transpose((0, 3, 1, 2))
-        image_list = preprocess_input(image_list)
-        mask_list = np.array(mask_list, dtype=np.float32)
-        mask_list /= 255.0
-        yield image_list, mask_list
+        images = np.array(image_list, dtype=np.float32)
+        images = preprocess(images, mode="image")
+        masks = np.array(mask_list, dtype=np.float32)
+        masks = preprocess(masks, mode="mask")
+        yield images, masks
 
 
 def train_unet():
@@ -77,7 +81,7 @@ def train_unet():
     batch_size = 4
     optim_type = 'SGD'
     learning_rate = 0.001
-    model = unet_kaggle()
+    model = unet()
     model.summary()
     if os.path.isfile(out_model_path):
         model.load_weights(out_model_path)
@@ -89,9 +93,10 @@ def train_unet():
     model.compile(optimizer=optim, loss=dice_coef_loss, metrics=[dice_coef])
 
     callbacks = [
-        ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=5, min_lr=1e-9, epsilon=0.00001, verbose=1, mode='min'),
+        ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=5, min_lr=1e-9, epsilon=0.00001, verbose=1,
+                          mode='min'),
         # EarlyStopping(monitor='val_loss', patience=patience, verbose=0),
-        ModelCheckpoint('zf_unet_576_temp.h5', monitor='val_loss', save_best_only=True, verbose=1),
+        ModelCheckpoint('pretrain_{}.h5'.format("unet"), monitor='val_loss', save_best_only=True, verbose=1),
     ]
 
     print('Start training...')
@@ -105,15 +110,16 @@ def train_unet():
         callbacks=callbacks)
 
     model.save_weights(out_model_path)
-    pd.DataFrame(history.history).to_csv('zf_unet_576_train.csv', index=False)
-    print('Training is finished (weights zf_unet_576.h5 and log zf_unet_576_train.csv are generated )...')
+    # pd.DataFrame(history.history).to_csv('zf_unet_576_train.csv', index=False)
+    # print('Training is finished (weights zf_unet_576.h5 and log zf_unet_576_train.csv are generated )...')
 
 
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "2"
     if K.backend() == 'tensorflow':
         try:
             from tensorflow import __version__ as __tensorflow_version__
+
             print('Tensorflow version: {}'.format(__tensorflow_version__))
         except:
             print('Tensorflow is unavailable...')
