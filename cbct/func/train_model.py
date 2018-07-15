@@ -11,6 +11,7 @@ from datetime import datetime
 import keras
 import keras.backend.tensorflow_backend as KTF
 import tensorflow as tf
+from func.model_resnet import resnet50_unet_sigmoid
 from keras import metrics
 from keras.callbacks import ModelCheckpoint
 from keras.engine.saving import load_model
@@ -51,9 +52,10 @@ class ModelCheckpointMGPU(ModelCheckpoint):
 
 
 def train_generator(model_def, model_saved_path, h5_data_path, batch_size, epochs, model_weights, gpus=1, verbose=1):
-    opt = Adam(lr=1e-4, amsgrad=True)
+    opt = Adam(lr=1e-3, amsgrad=True)
     fit_metrics = [dice_coef_rounded_ch0, dice_coef_rounded_ch1, metrics.binary_crossentropy, mean_iou_ch0,
                    mean_iou_ch1, mean_iou]
+    # fit_metrics = [dice_coef_rounded_ch0, metrics.binary_crossentropy, mean_iou_ch0]
     # es = EarlyStopping('val_acc', patience=30, mode="auto", min_delta=0.0)
     # reduce_lr = ReduceLROnPlateau(monitor='val_acc', factor=0.1, patience=20, verbose=2, epsilon=1e-4,
     #                               mode='auto')
@@ -145,19 +147,22 @@ def train_generator(model_def, model_saved_path, h5_data_path, batch_size, epoch
 
 
 def __main():
-    model_saved_path = "/home/jzhang/helloworld/mtcnn/cb/model_weights/model_2channel.h5"
-    model_trained = "model_weights/model.h5"
-    h5_data_path = "/home/jzhang/helloworld/mtcnn/cb/inputs/data.hdf5"
-    model_def = unet_kaggle()
-    train_generator(model_def, model_saved_path, h5_data_path, batch_size=8, epochs=800, model_weights=model_saved_path,
-                    gpus=2,
+    # model_saved_path = "/home/jzhang/helloworld/mtcnn/cb/model_weights/model_2channel.h5"
+    # model_trained = "model_weights/model.h5"
+    # h5_data_path = "/home/jzhang/helloworld/mtcnn/cb/inputs/data.hdf5"
+    model_saved_path = "/home/zj/helloworld/study/njai_challenge/cbct/model_weights/resnet50_unet.h5"
+    # model_trained = "/home/zj/helloworld/study/njai_challenge/cbct/model_weights/model.h5"
+    h5_data_path = "/home/zj/helloworld/study/njai_challenge/cbct/inputs/data.hdf5"
+    model_def = resnet50_unet_sigmoid(weights="imagenet")
+    train_generator(model_def, model_saved_path, h5_data_path, batch_size=1, epochs=400, model_weights=None,
+                    gpus=1,
                     verbose=2)
 
 
 if __name__ == '__main__':
     start = datetime.now()
     print("Start time is {}".format(start))
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0,2"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
     sess = tf.Session(config=config)
