@@ -14,9 +14,10 @@ val_lmdb_y/
 **/train_lmdb_y/
 **/val_lmdb_y/
 
-# **/inputs/
-# **/input/
-
+**/inputs/
+**/input/
+**/outputs/
+**/output/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

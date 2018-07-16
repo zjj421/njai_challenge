@@ -12,9 +12,11 @@ from PIL import Image
 from keras.models import load_model
 from matplotlib import pyplot as plt
 
-from cbct.func.model import unet_kaggle
+from cbct.func.model_inception_resnet_v2 import get_inception_resnet_v2_unet_sigmoid
 from cbct.func.utils import preprocess
-from module.utils_public import apply_mask
+from tqdm import tqdm
+
+from module.utils_public import apply_mask, get_file_path_list
 
 
 class ModelDeployment(object):
@@ -22,14 +24,18 @@ class ModelDeployment(object):
         try:
             model = load_model(model_trained)
         except:
-            model = model_def()
+            # print("Loading imagenet weights ...")
+            model = model_def(weights=None)
+
+            print("Loading weights ...")
             model.load_weights(model_trained)
         model.summary()
         self.model = model
 
     def read_images(self, image_path_lst):
+        print("Loading images ...")
         imgs = []
-        for image_path in image_path_lst:
+        for image_path in tqdm(image_path_lst):
             img = Image.open(image_path)
             img = np.array(img)
             if len(img.shape) == 3:
@@ -45,9 +51,12 @@ class ModelDeployment(object):
 
     def predict_and_save_image_masks(self, image_path_lst, save_dir, batch_size=32, color=None, alpha=0.5):
         images = self.read_images(image_path_lst)
-        images = [np.concatenate([image for i in range(3)], axis=-1) for image in images]
         masks = self.predict(images, batch_size)
-        masks = [np.squeeze(mask, -1) for mask in masks]
+        masks = np.where(masks > 0.5, 1, 0)
+
+        images = [np.concatenate([image for i in range(3)], axis=-1) for image in images]
+        masks = [mask[..., 0] for mask in masks]
+
         if color is None:
             color = [0, 191, 255]
         image_masks = [apply_mask(image, mask, color, alpha) for image, mask in zip(images, masks)]
@@ -77,18 +86,12 @@ class ModelDeployment(object):
 
 
 def infer_do():
-    model_path = "/home/topsky/helloworld/study/njai_challenge/cbct/func/model.h5"
-    model = ModelDeployment(unet_kaggle, model_path)
-    image_path = "/media/topsky/HHH/jzhang_root/data/njai/cbct/train/002.tif"
-    image, pred = model.predict(image_path)
-    pred *= 255
-    image = np.concatenate([image for i in range(3)], axis=-1)
-    pred = np.squeeze(pred, axis=-1)
-    # pred = np.concatenate([pred for i in range(3)], axis=-1)
-    print(image.shape)
-    print(pred.shape)
-    kw = {"image": image, "mask": pred}
-    model.show_image(**kw)
+    model_path = "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/inception_resnet_v2_all_train_1.h5"
+    image_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/train"
+    pred_mask_image_save_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/pred_mask_images_20180714"
+    image_path_lst = get_file_path_list(image_dir)
+    model = ModelDeployment(get_inception_resnet_v2_unet_sigmoid, model_path)
+    model.predict_and_save_image_masks(image_path_lst, pred_mask_image_save_dir, batch_size=4, color=None, alpha=0.5)
 
 
 def __main():

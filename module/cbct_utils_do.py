@@ -7,13 +7,18 @@ import glob
 import os
 import subprocess
 from datetime import datetime
+from pprint import pprint
 
+import cv2
 import h5py
 import numpy as np
 import scipy.misc
 from PIL import Image
+from tqdm import tqdm
 
-from module.utils_public import apply_mask
+from module.utils_public import apply_mask, get_file_path_list, random_colors
+import pandas as pd
+import matplotlib.pyplot as plt
 
 
 def save_labelme2_mask():
@@ -54,7 +59,7 @@ def save_mask_image():
     images_dir = os.path.join(data_dir, "train")
     masks_dir = os.path.join(data_dir, "label")
     # 新合并图的保存路径。
-    mask_image_dir = os.path.join(data_dir, "mask_image_1")
+    mask_image_dir = os.path.join(data_dir, "image_mask_20180714")
     if not os.path.isdir(mask_image_dir):
         os.makedirs(mask_image_dir)
     basename_lst = next(os.walk(images_dir))[2]
@@ -63,6 +68,7 @@ def save_mask_image():
     for basename in basename_lst:
         image = Image.open(os.path.join(images_dir, basename))
         image = np.array(image)
+        # image = cv2.imread(os.path.join(images_dir, basename))
         if len(image.shape) == 2:
             image = np.concatenate([np.expand_dims(image, axis=-1) for i in range(3)], axis=-1)
         mask = Image.open(os.path.join(masks_dir, basename))
@@ -70,10 +76,14 @@ def save_mask_image():
         if len(mask.shape) == 3:
             assert mask[:, :, 0].all() == mask[:, :, 1].all() and mask[:, :, 0].all() == mask[:, :, 2].all()
             mask = mask[:, :, 0]
+        mask = np.where(mask > 0.5, 1, 0)
+
+        # mask = mask // 255
         mask_image = apply_mask(image, mask, color, alpha=alpha)
         # mask_image是否与image一起显示。
-        # mask_image = np.concatenate([image, mask_image], axis=1)
+        mask_image = np.concatenate([image, mask_image], axis=1)
         scipy.misc.toimage(mask_image, cmin=0.0, cmax=...).save(os.path.join(mask_image_dir, basename))
+        # cv2.imwrite(os.path.join(mask_image_dir, basename), mask_image)
 
 
 def make_hdf5_database():
@@ -92,7 +102,7 @@ def make_hdf5_database():
     image_file_path_lst = [os.path.join(data_root, "train", x) for x in file_basename_lst]
     mask_1_file_path_lst = [os.path.join(data_root, "label", x) for x in file_basename_lst]
     mask_2_file_path_lst = [os.path.join(data_root, "gum_mask", x) for x in file_basename_lst]
-
+    # TODO idx没有与实际名称对应起来。
     for i in range(len(file_basename_lst)):
         idx = '{:08}'.format(i + 1)
         # 保存image,原样保存。
@@ -147,12 +157,73 @@ def add_train_val_id_hdf5():
     f.close()
 
 
+def combine_image_mask_predict():
+    image_mask_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/image_mask_20180714"
+    pred_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/pred_mask_images_20180714"
+    image_mask_pred_save_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/image_mask_pred_20180714"
+    if not os.path.isdir(image_mask_pred_save_dir):
+        os.makedirs(image_mask_pred_save_dir)
+    pred_path_lst = get_file_path_list(pred_dir, ext='.tif')
+    file_lst = [os.path.basename(x) for x in pred_path_lst]
+    image_mask_path_lst = [os.path.join(image_mask_dir, x) for x in file_lst]
+    for i in tqdm(range(len(pred_path_lst))):
+        image_mask = np.array(Image.open(image_mask_path_lst[i]))
+        pred = np.array(Image.open(pred_path_lst[i]))
+        image_mask_pred = np.concatenate([image_mask, pred], axis=1)
+        scipy.misc.toimage(image_mask_pred, cmin=0.0, cmax=...).save(
+            os.path.join(image_mask_pred_save_dir, file_lst[i]))
+
+
+def read_data_test():
+    data_path = "/home/topsky/helloworld/study/njai_challenge/cbct/inputs/data.hdf5"
+    val_id_save_path = "/media/topsky/HHH/jzhang_root/data/njai/cbct/pred_mask_images_20180711/val_id.csv"
+    f = h5py.File(data_path, mode="r")
+    v = f["val_id"].value
+    v = [x.tostring().decode() for x in v]
+    v = sorted(v)
+    val_series = pd.Series(data=v, name="val_id")
+    val_series.to_csv(val_id_save_path, index=False)
+    print(val_series)
+
+
+def read_data_and_show():
+    data_path = "/home/topsky/helloworld/study/njai_challenge/cbct/inputs/data.hdf5"
+    val_id_save_path = "/media/topsky/HHH/jzhang_root/data/njai/cbct/pred_mask_images_20180711/val_id.csv"
+    f = h5py.File(data_path, mode="r")
+    v = f["val_id"].value
+    v = [x.tostring().decode() for x in v]
+    v = sorted(v)
+    print(v)
+    mask1_group = f["mask_1"]
+    mask = mask1_group["00000001"]
+    print(mask.shape)
+    print(np.array(mask))
+    plt.figure()
+    plt.imshow(mask[..., 0], cmap="gray")
+    plt.show()
+
+
+def map_file2index():
+    data_root = "/media/topsky/HHH/jzhang_root/data/njai/cbct"
+    file_basename_lst = next(os.walk(os.path.join(data_root, "train")))[2]
+    idx2file = {}
+    for i in range(len(file_basename_lst)):
+        idx = '{:08}'.format(i + 1)
+        idx2file[idx] = file_basename_lst[i]
+    pprint(idx2file)
+
+
 def __main():
+    np.set_printoptions(threshold=np.inf)
     # make_hdf5_database()
     # add_train_val_id_hdf5()
     # save_mask_image()
     # show_image()
     # save_labelme2_mask()
+    # read_data_test()
+    combine_image_mask_predict()
+    # read_data_and_show()
+    # map_file2index()
     pass
 
 

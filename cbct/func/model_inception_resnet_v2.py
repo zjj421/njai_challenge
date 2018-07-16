@@ -7,6 +7,7 @@ from keras.layers import Input, BatchNormalization, Conv2D, MaxPooling2D, Averag
 from keras.losses import categorical_crossentropy, binary_crossentropy
 # from keras.applications.inception_resnet_v2 import InceptionResNetV2, inception_resnet_block, conv2d_bn
 # from keras.applications.densenet import DenseNet121, dense_block, transition_block
+from keras.utils import plot_model
 from keras_applications.densenet import dense_block, transition_block, DenseNet121
 from keras_applications.inception_resnet_v2 import conv2d_bn, inception_resnet_block, InceptionResNetV2
 
@@ -243,6 +244,7 @@ def get_inception_resnet_v2_unet_sigmoid(input_shape=(IMG_H, IMG_W, IMG_C), weig
         for i in range(2, len(inception_resnet_v2.layers) - 1):
             model.layers[i].set_weights(inception_resnet_v2.layers[i].get_weights())
             model.layers[i].trainable = False
+        print("imagenet weights have been loaded.")
 
     return model
 
@@ -253,3 +255,9 @@ if __name__ == '__main__':
     model = InceptionResNetV2(weights="imagenet", include_top=False,
                                                 input_shape=(224, 224, 3))
     model.summary()
+    exit()
+
+    model = get_inception_resnet_v2_unet_sigmoid(weights=None)
+    model.summary()
+    # plot_model(model, to_file="cbct/outputs/inception_resnet_v2_unet.png", show_shapes=True,
+    #            )

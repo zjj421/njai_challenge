@@ -3,9 +3,26 @@
 # Created by zjj421 on 18-6-15
 # Task: 
 # Insights:
+import colorsys
 import os
-import numpy as np
+import random
+import re
 from datetime import datetime
+
+import numpy as np
+
+
+def random_colors(N, bright=True):
+    """
+    Generate random colors.
+    To get visually distinct colors, generate them in HSV space then
+    convert to RGB.
+    """
+    brightness = 1.0 if bright else 0.7
+    hsv = [(i / N, 1, brightness) for i in range(N)]
+    colors = list(map(lambda c: colorsys.hsv_to_rgb(*c), hsv))
+    random.shuffle(colors)
+    return colors
 
 
 def apply_mask(image, mask, color, alpha=0.5):
@@ -22,22 +39,29 @@ def apply_mask(image, mask, color, alpha=0.5):
     """
     mask_image = image.copy()
     for c in range(3):
-        mask_image[:, :, c] = np.where(mask == 255,
+        mask_image[:, :, c] = np.where(mask == 1,
                                        mask_image[:, :, c] * (1 - alpha) + alpha * color[c],
                                        mask_image[:, :, c])
     return mask_image
 
 
-def get_file_path_from_dir(dir_path):
+def get_file_path_list(dir_path, ext=None):
     """
     从给定目录中获取所有文件的路径
 
     :param dir_path: 路径名
     :return: 该路径下的所有文件路径(path)列表
     """
+    if ext:
+        patt = re.compile(r".*{}$".format(ext))
+
     file_path_list = []
     for root, dirs, files in os.walk(dir_path):
         for file in files:
+            if ext:
+                result = patt.search(file)
+                if not result:
+                    continue
             path = os.path.join(root, file)
             file_path_list.append(path)
     print("'{}'目录中文件个数 : {}".format(os.path.basename(dir_path), len(file_path_list)))
