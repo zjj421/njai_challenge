@@ -52,7 +52,7 @@ class ModelCheckpointMGPU(ModelCheckpoint):
 
 
 def train_generator(model_def, model_saved_path, h5_data_path, batch_size, epochs, model_weights, gpus=1, verbose=1):
-    opt = Adam(lr=1e-3, amsgrad=True)
+    opt = Adam(lr=1e-4, amsgrad=True)
     fit_metrics = [dice_coef_rounded_ch0, dice_coef_rounded_ch1, metrics.binary_crossentropy, mean_iou_ch0,
                    mean_iou_ch1, mean_iou]
     # fit_metrics = [dice_coef_rounded_ch0, metrics.binary_crossentropy, mean_iou_ch0]
@@ -67,6 +67,7 @@ def train_generator(model_def, model_saved_path, h5_data_path, batch_size, epoch
                 model = load_model(model_weights)
             except:
                 model = model_def
+                print("Loading weights ...")
                 model.load_weights(model_weights)
             print("Model weights {} have been loaded.".format(model_weights))
     else:
@@ -153,7 +154,8 @@ def __main():
     model_saved_path = "/home/zj/helloworld/study/njai_challenge/cbct/model_weights/resnet50_unet.h5"
     # model_trained = "/home/zj/helloworld/study/njai_challenge/cbct/model_weights/model.h5"
     h5_data_path = "/home/zj/helloworld/study/njai_challenge/cbct/inputs/data.hdf5"
-    model_def = resnet50_unet_sigmoid(weights="imagenet")
+    # model_def = resnet50_unet_sigmoid(weights="imagenet")
+    model_def = resnet50_unet_sigmoid(weights=None)
     train_generator(model_def, model_saved_path, h5_data_path, batch_size=1, epochs=400, model_weights=None,
                     gpus=1,
                     verbose=2)

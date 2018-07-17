@@ -252,12 +252,12 @@ def get_inception_resnet_v2_unet_sigmoid(input_shape=(IMG_H, IMG_W, IMG_C), weig
 if __name__ == '__main__':
     os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
-    model = InceptionResNetV2(weights="imagenet", include_top=False,
-                                                input_shape=(224, 224, 3))
-    model.summary()
-    exit()
+    # model = InceptionResNetV2(weights="imagenet", include_top=False,
+    #                                             input_shape=(224, 224, 3))
+    # model.summary()
+    # exit()
 
     model = get_inception_resnet_v2_unet_sigmoid(weights=None)
-    model.summary()
-    # plot_model(model, to_file="cbct/outputs/inception_resnet_v2_unet.png", show_shapes=True,
-    #            )
+    # model.summary()
+    plot_model(model, to_file="/tmp/inception_resnet_v2_unet.png", show_shapes=True,
+               )

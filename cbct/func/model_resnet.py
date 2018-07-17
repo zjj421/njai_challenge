@@ -136,8 +136,6 @@ def __main():
     layers = [layer.name for layer in layers]
     model.summary()
     # del model
-    import keras.backend as K
-    K.clear_session()
     model2 = ResNet50(include_top=False, weights=None)
     layers2 = model2.layers
     layers2 = [layer.name for layer in layers2]
