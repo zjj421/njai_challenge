@@ -2,10 +2,14 @@
 # -*- coding: utf-8 -*-
 # Created by zjj421 on 18-6-30
 # Task: 
-# Insights: 
+# Insights:
+import h5py
+import json
 import os
 from datetime import datetime
+from pprint import pprint
 
+import cv2
 import numpy as np
 from PIL import Image
 from matplotlib import pyplot as plt
@@ -60,7 +64,52 @@ def data_analysis():
     #         print(train_file_path_lst[i])
 
 
+def cv_imread_test():
+    np.set_printoptions(threshold=np.inf)
+    image_path = "/media/topsky/HHH/jzhang_root/data/njai/cbct/label/051.tif"
+    # img = cv2.imread(image_path)
+    # img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+    img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+    # img = cv2.imread(image_path, cv2.IMREAD_UNCHANGED)
+    print(img.shape)
+    # img = np.stack([img, img], axis=2)
+    # print(img.shape)
+    # print(img[0])
+
+
+def k_fold_test():
+    k_fold_path = "/home/topsky/helloworld/study/njai_challenge/module/k_fold.csv"
+    with open(k_fold_path, 'r') as f:
+        lines = f.readlines()
+    k_fold_map = {}
+    for line in lines:
+        value, idx = line.split(",")
+        value_start_end = value.strip().split("-")
+        value_lst = ["{:03}".format(x) for x in range(int(value_start_end[0]), int(value_start_end[1]) + 1)]
+        idx = idx.strip()
+        if idx not in k_fold_map.keys():
+            k_fold_map[idx] = value_lst
+        else:
+            k_fold_map[idx].extend(value_lst)
+    # with open("k_fold_map.json", "w") as f:
+    #     json.dump(k_fold_map, f)
+    for i in k_fold_map.keys():
+        print(i, len(k_fold_map[i]))
+
+def read_h5_test():
+    h5_data_path = "/home/topsky/helloworld/study/njai_challenge/cbct/inputs/data_0717.hdf5"
+    f_h5 = h5py.File(h5_data_path, 'r+')
+    stage1_predict_mask_grp = f_h5["stage1_predict_masks"]
+    for i, key in enumerate(stage1_predict_mask_grp.keys()):
+        mask = stage1_predict_mask_grp[key].value
+        print(mask.max())
+        print(mask)
+        print(mask.shape)
+        exit()
+
 def __main():
+    np.set_printoptions(threshold=np.inf)
+    read_h5_test()
     pass
 
 

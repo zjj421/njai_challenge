@@ -5,39 +5,25 @@
 # Insights: 
 
 import os
-import sys
 from datetime import datetime
 
-import keras
 import keras.backend.tensorflow_backend as KTF
+import pandas as pd
 import tensorflow as tf
 from keras import metrics
-from keras.callbacks import ModelCheckpoint
-from keras.engine.saving import load_model
-from keras.layers import DepthwiseConv2D
+from keras.callbacks import ModelCheckpoint, CSVLogger, LearningRateScheduler
+from keras.engine.saving import load_model, save_model
 from keras.optimizers import Adam
 from keras.preprocessing.image import ImageDataGenerator
-from keras.utils import CustomObjectScope, multi_gpu_model
-from keras_applications.mobilenet import relu6
+from keras.utils import multi_gpu_model
+from tqdm import tqdm
 
-from func.model import unet_kaggle, unet
-from func.model_inception_resnet_v2 import get_inception_resnet_v2_unet_sigmoid, dice_coef_rounded_ch0, \
-    dice_coef_rounded_ch1, sigmoid_dice_loss
-from func.model_resnet import resnet50_unet_sigmoid
-from func.utils import mean_iou, prepare_all_data, mean_iou_ch0, mean_iou_ch1
-from zf_unet_576_model import dice_coef, dice_coef_loss
+from func.config import Config
+from func.data_io import DataSet
+from func.model_inception_resnet_v2 import sigmoid_dice_stage1_loss, get_inception_resnet_v2_unet_sigmoid
+from zf_unet_576_model import dice_coef
 
-
-# class MultiGpuCbk(keras.callbacks.Callback):
-#     def __init__(self, model):
-#         self.model_to_save = model
-#
-#     def on_epoch_end(self, epoch, logs=None):
-#         try:
-#             self.model_to_save.save('tmp/model_at_epoch_{}.h5'.format(epoch + 1))
-#         except:
-#             os.makedirs("tmp")
-#             self.model_to_save.save('tmp/model_at_epoch_{}.h5'.format(epoch + 1))
+CONFIG = Config()
 
 
 class ModelCheckpointMGPU(ModelCheckpoint):
@@ -51,30 +37,55 @@ class ModelCheckpointMGPU(ModelCheckpoint):
         super().on_epoch_end(epoch, logs)
 
 
-def train_generator(model_def, model_saved_path, h5_data_path, batch_size, epochs, model_weights, gpus=1, verbose=1):
-    opt = Adam(lr=1e-4, amsgrad=True)
-    fit_metrics = [dice_coef_rounded_ch0, dice_coef_rounded_ch1, metrics.binary_crossentropy, mean_iou_ch0,
-                   mean_iou_ch1, "acc"]
+def get_learning_rate_scheduler(epoch, current_lr):
+    df = pd.read_csv(CONFIG.learning_rate_scheduler_csv)
+    df.set_index("epoch", inplace=True)
+    if epoch in df.index:
+        return float(df.loc[epoch])
+    else:
+        return current_lr
+
+
+def train_generator(model_def, model_saved_path, h5_data_path, batch_size, epochs, model_weights, gpus=1, verbose=1,
+                    csv_log_suffix="0"):
+    learning_rate_scheduler = LearningRateScheduler(schedule=get_learning_rate_scheduler, verbose=0)
+    opt = Adam(lr=5e-5, amsgrad=True)
+    fit_metrics = [dice_coef, metrics.binary_crossentropy, "acc"]
+    fit_loss = sigmoid_dice_stage1_loss
+    log_path = os.path.join(CONFIG.log_root, "log_" + os.path.splitext(os.path.basename(model_saved_path))[
+        0]) + "_" + csv_log_suffix + ".csv"
+    csv_logger = CSVLogger(log_path, append=True)
+
+    # fit_metrics = [dice_coef_rounded_ch0, dice_coef_rounded_ch1, metrics.binary_crossentropy, mean_iou_ch0,
+    #                mean_iou_ch1, "acc"]
     # fit_metrics = [dice_coef_rounded_ch0, metrics.binary_crossentropy, mean_iou_ch0]
     # es = EarlyStopping('val_acc', patience=30, mode="auto", min_delta=0.0)
     # reduce_lr = ReduceLROnPlateau(monitor='val_acc', factor=0.1, patience=20, verbose=2, epsilon=1e-4,
     #                               mode='auto')
 
     if model_weights:
-        with CustomObjectScope({'relu6': relu6,
-                                'DepthwiseConv2D': DepthwiseConv2D}):
-            try:
-                model = load_model(model_weights)
-            except:
-                model = model_def
-                print("Loading weights ...")
-                model.load_weights(model_weights)
-            print("Model weights {} have been loaded.".format(model_weights))
+        model = model_def
+        print("Loading weights ...")
+        try:
+            model.load_weights(model_weights, by_name=True)
+        except:
+            stage1_model = get_inception_resnet_v2_unet_sigmoid(weights=None)
+            for i in tqdm(range(2, len(stage1_model.layers) - 1)):
+                model.layers[i].set_weights(stage1_model.layers[i].get_weights())
+                model.layers[i].trainable = False
+            save_model(model, model_saved_path, include_optimizer=False)
+        print("Model weights {} have been loaded.".format(model_weights))
+        # stage1_model = get_inception_resnet_v2_unet_sigmoid(weights=None)
+        # for i in tqdm(range(2, len(stage1_model.layers) - 1)):
+        #     model.layers[i].trainable = False
     else:
         model = model_def
         print("Model created.")
 
-    x_train, y_train = prepare_all_data(h5_data_path, mode="train")
+    dataset = DataSet(h5_data_path, val_fold_nb=0)
+    x_train, y_train = dataset.prepare_stage2_data(mode="train")
+    print(x_train.shape)
+    print(y_train.shape)
     datagen_train = ImageDataGenerator(
         rotation_range=0.2,
         width_shift_range=0.05,
@@ -87,7 +98,7 @@ def train_generator(model_def, model_saved_path, h5_data_path, batch_size, epoch
     )
     train_data_generator = datagen_train.flow(x_train, y_train, batch_size, shuffle=True)
 
-    x_val, y_val = prepare_all_data(h5_data_path, mode="val")
+    x_val, y_val = dataset.prepare_stage2_data(mode="val")
     datagen_val = ImageDataGenerator(
         featurewise_center=False,
         featurewise_std_normalization=False,
@@ -99,7 +110,7 @@ def train_generator(model_def, model_saved_path, h5_data_path, batch_size, epoch
 
     if gpus > 1:
         parallel_model = multi_gpu_model(model, gpus=gpus)
-        parallel_model.compile(loss=sigmoid_dice_loss,
+        parallel_model.compile(loss=fit_loss,
                                optimizer=opt,
                                metrics=fit_metrics)
         model.summary()
@@ -110,14 +121,14 @@ def train_generator(model_def, model_saved_path, h5_data_path, batch_size, epoch
             # steps_per_epoch=count_train // batch_size,
             # validation_steps=count_val // batch_size,
             epochs=epochs,
-            callbacks=[cbk1],
+            callbacks=[cbk1, csv_logger, learning_rate_scheduler],
             verbose=verbose,
-            workers=4,
+            workers=2,
             use_multiprocessing=True,
             shuffle=True
         )
     else:
-        model.compile(loss=sigmoid_dice_loss,
+        model.compile(loss=fit_loss,
                       optimizer=opt,
                       metrics=fit_metrics)
         model.summary()
@@ -129,9 +140,9 @@ def train_generator(model_def, model_saved_path, h5_data_path, batch_size, epoch
             steps_per_epoch=None,
             validation_steps=None,
             epochs=epochs,
-            callbacks=[cbk1],
+            callbacks=[cbk1, csv_logger, learning_rate_scheduler],
             verbose=verbose,
-            workers=4,
+            workers=2,
             use_multiprocessing=True,
             shuffle=True
         )
@@ -148,32 +159,19 @@ def train_generator(model_def, model_saved_path, h5_data_path, batch_size, epoch
 
 
 def __main():
-    # model_saved_path = "/home/jzhang/helloworld/mtcnn/cb/model_weights/model_2channel.h5"
-    # model_trained = "model_weights/model.h5"
-    # h5_data_path = "/home/jzhang/helloworld/mtcnn/cb/inputs/data.hdf5"
-<<<<<<< HEAD
-    model_saved_path = "/home/zj/helloworld/study/njai_challenge/cbct/model_weights/resnet50_unet.h5"
-    # model_trained = "/home/zj/helloworld/study/njai_challenge/cbct/model_weights/model.h5"
-    h5_data_path = "/home/zj/helloworld/study/njai_challenge/cbct/inputs/data.hdf5"
-    # model_def = resnet50_unet_sigmoid(weights="imagenet")
-    model_def = resnet50_unet_sigmoid(weights=None)
-    train_generator(model_def, model_saved_path, h5_data_path, batch_size=1, epochs=400, model_weights=None,
-                    gpus=1,
-=======
-    model_saved_path = "/home/jzhang/helloworld/mtcnn/cb/model_weights/resnet50_unet.h5"
-    h5_data_path = "/home/jzhang/helloworld/mtcnn/cb/inputs/data.hdf5"
-    # model_def = resnet50_unet_sigmoid(weights="imagenet")
-    model_def = resnet50_unet_sigmoid(weights=None)
-    train_generator(model_def, model_saved_path, h5_data_path, batch_size=8, epochs=100, model_weights=model_saved_path,
-                    gpus=2,
->>>>>>> 6688c2a4c09cfe4aefa35a04a0899e0d0b36aeb4
-                    verbose=2)
+    model_weights = "/home/jzhang/helloworld/mtcnn/cb/model_weights/inception_v4_stage1.h5"
+    model_saved_path = "/home/jzhang/helloworld/mtcnn/cb/model_weights/inception_v4_stage2.h5"
+    h5_data_path = "/home/jzhang/helloworld/mtcnn/cb/inputs/data_0717.hdf5"
+    model_def = get_inception_resnet_v2_unet_sigmoid(input_shape=(576, 576, 2), weights=None)
+    # model_def = get_inception_resnet_v2_unet_sigmoid_stage1(weights="imagenet")
+    train_generator(model_def, model_saved_path, h5_data_path, batch_size=3, epochs=1000, model_weights=model_saved_path,
+                    gpus=1, verbose=2, csv_log_suffix="0")
 
 
 if __name__ == '__main__':
     start = datetime.now()
     print("Start time is {}".format(start))
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0, 2"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "2"
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
     sess = tf.Session(config=config)

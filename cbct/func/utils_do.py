@@ -8,7 +8,21 @@ from datetime import datetime
 
 import numpy as np
 
-from func.utils import prepare_all_data
+from func.train_model import get_learning_rate_scheduler
+from func.utils import prepare_all_data, show_training_log
+
+
+def learning_rate_scheduler_test():
+    epoch = 700
+    current_lr = 0.01
+    lr = get_learning_rate_scheduler(epoch, current_lr)
+    print("dd")
+    print(lr)
+
+
+def do_show_training_log():
+    log_csv = "/home/jzhang/helloworld/mtcnn/cb/logs/inception_v4_stage1_stage1.csv"
+    show_training_log(log_csv)
 
 
 def check_baseline_accuracy():
@@ -29,7 +43,9 @@ def check_baseline_accuracy():
 
 
 def __main():
-    check_baseline_accuracy()
+    # check_baseline_accuracy()
+    learning_rate_scheduler_test()
+    pass
 
 
 if __name__ == '__main__':

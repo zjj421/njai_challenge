@@ -3,17 +3,18 @@
 # Created by zjj421 on 18-6-21
 # Task:
 # Insights:
+import h5py
 import os
 from datetime import datetime
 
+import cv2
 import numpy as np
 import scipy.misc
 from PIL import Image
+from cbct.func.model_inception_resnet_v2 import get_inception_resnet_v2_unet_sigmoid_stage1
+from cbct.func.utils import preprocess
 from keras.models import load_model
 from matplotlib import pyplot as plt
-
-from cbct.func.model_inception_resnet_v2 import get_inception_resnet_v2_unet_sigmoid
-from cbct.func.utils import preprocess
 from tqdm import tqdm
 
 from module.utils_public import apply_mask, get_file_path_list
@@ -25,21 +26,53 @@ class ModelDeployment(object):
             model = load_model(model_trained)
         except:
             # print("Loading imagenet weights ...")
-            model = model_def(weights=None)
+            model = model_def
 
             print("Loading weights ...")
             model.load_weights(model_trained)
         model.summary()
         self.model = model
 
+    def predict_and_save_stage1_masks(self, h5_data_path, batch_size=32):
+        """
+        从h5data中读取images进行预测，并把预测mask保存进h5data中。
+        Args:
+            h5_data_path: str, 存放有训练数据的h5文件路径。
+            batch_size: int, 批大小。
+
+        Returns: None.
+
+        """
+        f_h5 = h5py.File(h5_data_path, 'r+')
+        images_grp = f_h5["images"]
+        del f_h5["stage1_predict_masks"]
+        try:
+            stage1_predict_masks_grp = f_h5.create_group("stage1_predict_masks")
+        except:
+            stage1_predict_masks_grp = f_h5["stage1_predict_masks"]
+        keys = images_grp.keys()
+        images = []
+        for key in keys:
+            image = images_grp[key].value
+            if len(image.shape) == 3:
+                image = image[:, :, 0]
+            images.append(image)
+        images = np.array(images)
+        images = np.expand_dims(images, axis=-1)
+        print("Predicting ...")
+        masks = self.predict(images, batch_size)
+        print(masks.shape)
+        masks = np.squeeze(masks, axis=-1)
+        print("Saving predicted masks ...")
+        for i, key in enumerate(keys):
+            stage1_predict_masks_grp.create_dataset(key, dtype=np.float32, data=masks[i])
+        print("Done.")
+
     def read_images(self, image_path_lst):
         print("Loading images ...")
         imgs = []
         for image_path in tqdm(image_path_lst):
-            img = Image.open(image_path)
-            img = np.array(img)
-            if len(img.shape) == 3:
-                img = img[:, :, 0]
+            img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
             img = np.expand_dims(img, -1)
             imgs.append(img)
         return np.array(imgs)
@@ -86,12 +119,17 @@ class ModelDeployment(object):
 
 
 def infer_do():
-    model_path = "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/inception_resnet_v2_all_train_1.h5"
-    image_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/train"
-    pred_mask_image_save_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/pred_mask_images_20180714"
-    image_path_lst = get_file_path_list(image_dir)
-    model = ModelDeployment(get_inception_resnet_v2_unet_sigmoid, model_path)
-    model.predict_and_save_image_masks(image_path_lst, pred_mask_image_save_dir, batch_size=4, color=None, alpha=0.5)
+    # model_path = "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/inception_resnet_v2_all_train_1.h5"
+    model_path = "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/inception_v4_stage1.h5"
+    # image_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/train"
+    # pred_mask_image_save_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/pred_mask_stage1"
+    # image_path_lst = get_file_path_list(image_dir)
+    h5_data_path = "/home/topsky/helloworld/study/njai_challenge/cbct/inputs/data_0717.hdf5"
+
+    model_def = get_inception_resnet_v2_unet_sigmoid_stage1(weights=None)
+    model = ModelDeployment(model_def, model_path)
+    model.predict_and_save_stage1_masks(h5_data_path, batch_size=4)
+    # model.predict_and_save_image_masks(image_path_lst, pred_mask_image_save_dir, batch_size=4, color=None, alpha=0.5)
 
 
 def __main():

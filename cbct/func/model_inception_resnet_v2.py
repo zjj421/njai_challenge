@@ -1,18 +1,17 @@
 import os
 
 from keras import backend as K
-from keras.models import Model
 from keras.layers import Input, BatchNormalization, Conv2D, MaxPooling2D, AveragePooling2D, ZeroPadding2D, concatenate, \
     Concatenate, UpSampling2D, Activation
 from keras.losses import categorical_crossentropy, binary_crossentropy
-# from keras.applications.inception_resnet_v2 import InceptionResNetV2, inception_resnet_block, conv2d_bn
-# from keras.applications.densenet import DenseNet121, dense_block, transition_block
-from keras.utils import plot_model
+from keras.models import Model
 from keras_applications.densenet import dense_block, transition_block, DenseNet121
 from keras_applications.inception_resnet_v2 import conv2d_bn, inception_resnet_block, InceptionResNetV2
+from tqdm import tqdm
 
-from func.utils import IMG_H, IMG_W, IMG_C
+from func.config import Config
 
+CONFIG = Config()
 bn_axis = 3
 channel_axis = bn_axis
 
@@ -41,6 +40,11 @@ def softmax_dice_loss(y_true, y_pred):
     return categorical_crossentropy(y_true, y_pred) * 0.5 + dice_coef_loss(y_true[..., 0],
                                                                            y_pred[..., 0]) * 0.3 + dice_coef_loss(
         y_true[..., 1], y_pred[..., 1]) * 0.2
+
+
+def sigmoid_dice_stage1_loss(y_true, y_pred):
+    return binary_crossentropy(y_true, y_pred) * 0.6 + dice_coef_loss(y_true,
+                                                                      y_pred) * 0.4
 
 
 def sigmoid_dice_loss(y_true, y_pred):
@@ -138,7 +142,9 @@ def get_densenet121_unet_softmax(input_shape, weights='imagenet'):
     return model
 
 
-def get_inception_resnet_v2_unet_sigmoid(input_shape=(IMG_H, IMG_W, IMG_C), weights='imagenet'):
+def get_inception_resnet_v2_unet_sigmoid(input_shape=(CONFIG.img_h, CONFIG.img_w, CONFIG.img_c),
+                                         output_channels=1,
+                                         weights='imagenet'):
     inp = Input(input_shape)
 
     # Stem block: 35 x 35 x 192
@@ -234,14 +240,15 @@ def get_inception_resnet_v2_unet_sigmoid(input_shape=(IMG_H, IMG_W, IMG_C), weig
 
     conv10 = conv_block(UpSampling2D()(conv9), 64)
     conv10 = conv_block(conv10, 64)
-    res = Conv2D(2, (1, 1), activation='sigmoid')(conv10)
+    res = Conv2D(output_channels, (1, 1), activation='sigmoid')(conv10)
 
     model = Model(inp, res)
 
     if weights == 'imagenet':
         inception_resnet_v2 = InceptionResNetV2(weights=weights, include_top=False,
                                                 input_shape=(input_shape[0], input_shape[1], 3))
-        for i in range(2, len(inception_resnet_v2.layers) - 1):
+        print("Loading imagenet weights ...")
+        for i in tqdm(range(2, len(inception_resnet_v2.layers) - 1)):
             model.layers[i].set_weights(inception_resnet_v2.layers[i].get_weights())
             model.layers[i].trainable = False
         print("imagenet weights have been loaded.")
@@ -257,7 +264,7 @@ if __name__ == '__main__':
     # model.summary()
     # exit()
 
-    model = get_inception_resnet_v2_unet_sigmoid(weights=None)
+    # model = get_inception_resnet_v2_unet_sigmoid(weights=None)
     # model.summary()
-    plot_model(model, to_file="/tmp/inception_resnet_v2_unet.png", show_shapes=True,
-               )
+    # plot_model(model, to_file="/tmp/inception_resnet_v2_unet.png", show_shapes=True,
+    #            )

@@ -4,6 +4,7 @@
 # Task: 
 # Insights:
 import glob
+import json
 import os
 import subprocess
 from datetime import datetime
@@ -93,42 +94,54 @@ def make_hdf5_database():
 
     """
     data_root = "/media/topsky/HHH/jzhang_root/data/njai/cbct"
-    hdf5_path = "/home/topsky/helloworld/study/njai_challenge/cbct/inputs/data.hdf5"
+    hdf5_path = "/home/topsky/helloworld/study/njai_challenge/cbct/inputs/data_0717.hdf5"
     f = h5py.File(hdf5_path, "w")
     grp_x = f.create_group("images")
-    grp_y_1 = f.create_group("mask_1")
-    grp_y_2 = f.create_group("mask_2")
+    grp_y_0 = f.create_group("mask_0")
+    grp_y_2 = f.create_group("mask_1")
     file_basename_lst = next(os.walk(os.path.join(data_root, "train")))[2]
     image_file_path_lst = [os.path.join(data_root, "train", x) for x in file_basename_lst]
-    mask_1_file_path_lst = [os.path.join(data_root, "label", x) for x in file_basename_lst]
-    mask_2_file_path_lst = [os.path.join(data_root, "gum_mask", x) for x in file_basename_lst]
-    # TODO idx没有与实际名称对应起来。
-    for i in range(len(file_basename_lst)):
-        idx = '{:08}'.format(i + 1)
+    mask_0_file_path_lst = [os.path.join(data_root, "label", x) for x in file_basename_lst]
+    mask_1_file_path_lst = [os.path.join(data_root, "gum_mask", x) for x in file_basename_lst]
+    print("Saving images and labels ... ")
+    # 更新:idx与实际名称对应起来。
+    # 改用opencv读取图片。
+    for i in tqdm(range(len(file_basename_lst))):
+        idx = '{:08}'.format(int(os.path.splitext(file_basename_lst[i])[0]))
         # 保存image,原样保存。
-        image = Image.open(image_file_path_lst[i])
-        image = np.array(image, dtype=np.uint8)
-        # if len(image.shape) == 3:
-        #     image = image[:, :, 0]
+        image = cv2.imread(image_file_path_lst[i], cv2.IMREAD_UNCHANGED)
         grp_x.create_dataset(idx, dtype=np.uint8, data=image)  # [0, 255]
-        # 保存mask_tooth_root,如果通道数不是１,则只保存通道１的图片。
-        mask_1 = Image.open(mask_1_file_path_lst[i])
-        mask_1 = np.array(mask_1, dtype=np.uint8)
-        if len(mask_1.shape) == 3:
-            mask_1 = mask_1[:, :, 0]
-        mask_1 = np.expand_dims(mask_1, -1)
-        grp_y_1.create_dataset(idx, dtype=np.uint8, data=mask_1)
-        # 保存mask_gum,如果通道数不是１,则只保存通道１的图片。
-        mask_2 = Image.open(mask_2_file_path_lst[i])
-        mask_2 = np.array(mask_2, dtype=np.uint8)
-        if len(mask_2.shape) == 3:
-            mask_2 = mask_2[:, :, 0]
-        mask_2 = np.expand_dims(mask_2, -1)
-        grp_y_2.create_dataset(idx, dtype=np.uint8, data=mask_2)
-        if i % 10 == 0:
-            print("Saving images and labels ... ", i)
+        # 保存mask_tooth_root,只保存灰度图片 [0 or 255]
+        mask_0 = cv2.imread(mask_0_file_path_lst[i], cv2.IMREAD_GRAYSCALE)
+        grp_y_0.create_dataset(idx, dtype=np.uint8, data=mask_0)
+        # 保存mask_gum,只保存灰度图片.[0 or 255]
+        mask_1 = cv2.imread(mask_1_file_path_lst[i], cv2.IMREAD_GRAYSCALE)
+        grp_y_2.create_dataset(idx, dtype=np.uint8, data=mask_1)
+
+def add_k_fold_map_hdf5():
+    hdf5_path = "/home/topsky/helloworld/study/njai_challenge/cbct/inputs/data_0717.hdf5"
+    f_h5 = h5py.File(hdf5_path, mode="r+")
+    # del f_h5["k_fold_map"]
+    k_fold_path = "/home/topsky/helloworld/study/njai_challenge/module/k_fold.csv"
+    with open(k_fold_path, 'r') as f:
+        lines = f.readlines()
+    k_fold_map = {}
+    for line in lines:
+        value, idx = line.split(",")
+        value_start_end = value.strip().split("-")
+        value_lst = ["{:08}".format(x) for x in range(int(value_start_end[0]), int(value_start_end[1]) + 1)]
+        idx = idx.strip()
+        if idx not in k_fold_map.keys():
+            k_fold_map[idx] = value_lst
+        else:
+            k_fold_map[idx].extend(value_lst)
+    json_obj = json.dumps(k_fold_map)
+    f_h5.create_dataset("k_fold_map", data=json_obj)
 
 
+
+
+# not use any more
 def add_train_val_id_hdf5():
     hdf5_path = "/home/topsky/helloworld/study/njai_challenge/cbct/inputs/data.hdf5"
     f = h5py.File(hdf5_path, mode="r+")
@@ -215,15 +228,16 @@ def map_file2index():
 
 def __main():
     np.set_printoptions(threshold=np.inf)
-    # make_hdf5_database()
+    make_hdf5_database()
     # add_train_val_id_hdf5()
     # save_mask_image()
     # show_image()
     # save_labelme2_mask()
     # read_data_test()
-    combine_image_mask_predict()
+    # combine_image_mask_predict()
     # read_data_and_show()
     # map_file2index()
+    add_k_fold_map_hdf5()
     pass
 
 

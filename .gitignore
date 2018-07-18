@@ -13,6 +13,8 @@ val_lmdb_y/
 **/train_lmdb_x/
 **/train_lmdb_y/
 **/val_lmdb_y/
+*.tar.gz
+*.tar
 
 **/inputs/
 **/input/

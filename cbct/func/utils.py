@@ -11,9 +11,13 @@ import keras
 import numpy as np
 import tensorflow as tf
 from keras import backend as K
+import pandas as pd
 
-IMG_H, IMG_W, IMG_C = 576, 576, 1
 
+def show_training_log(log_csv):
+    df = pd.read_csv(log_csv)
+    columns = df.columns
+    print(columns)
 
 def get_input_data(f_obj, tmp_keys, transform, is_train):
     images = []
@@ -43,7 +47,7 @@ def get_input_data(f_obj, tmp_keys, transform, is_train):
 
 
 def preprocess(inputs_array, mode="mask"):
-
+    assert mode in ["image", "mask"]
     images = inputs_array / 127.5
     images -= 1.
     # images = inputs_array / 255
@@ -65,7 +69,7 @@ def prepare_all_data(h5_data_path, mode):
         raise NotImplementedError
     keys = [k.tostring().decode() for k in keys]
     images, labels = get_input_data(f, keys, transform=None, is_train=True)
-    images = preprocess(images, mode="images")
+    images = preprocess(images, mode="image")
     labels = preprocess(labels, mode="mask")
     print(mode, "images.shape: {}".format(images.shape))
     print(mode, "labels.shape: {}".format(labels.shape))
