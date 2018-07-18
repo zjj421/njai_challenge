@@ -87,6 +87,18 @@ class DataSet(object):
         masks = get_masks(self.f_h5, keys, 0)
         return images, masks
 
+    def prepare_2channels_output_data(self, mode):
+        assert mode in ["train", "val"]
+        if mode == "train":
+            keys = self.train_keys
+        else:
+            keys = self.val_keys
+        images = get_images(self.f_h5, keys)
+        masks_0 = get_masks(self.f_h5, keys, 0)
+        masks_1 = get_masks(self.f_h5, keys, 1)
+        masks = np.concatenate([masks_0, masks_1], axis=-1)
+        return images, masks
+
 
 def __main():
     h5_data_path = "/home/jzhang/helloworld/mtcnn/cb/inputs/data_0717.hdf5"

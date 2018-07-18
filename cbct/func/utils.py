@@ -12,12 +12,47 @@ import numpy as np
 import tensorflow as tf
 from keras import backend as K
 import pandas as pd
+import matplotlib.pyplot as plt
+import os
+
+
+def plot_output_fit(csv_path, savefig_path=None, show_img=False):
+    df = pd.read_csv(csv_path)
+    if "loss" in df.columns:
+        loss = df["loss"]
+    else:
+        loss = None
+    if "val_loss" in df.columns:
+        val_loss = df["val_loss"]
+    else:
+        val_loss = None
+    title = os.path.splitext(os.path.basename(csv_path))[0]
+    len_ = len(loss)
+    # np.linspace(start, end, num): [start, end],总共num个刻度, 步长 = (end - start) / (num - 1)
+    x = np.linspace(1, len_, len_)
+    if "loss" in df.columns:
+        plt.plot(x, loss, "r", label='loss')
+    if "val_loss" in df.columns:
+        plt.plot(x, val_loss, "g", label='val_loss')
+
+    plt.xlabel("epochs")
+    plt.ylabel("error")
+    # plt.yticks(np.linspace(0, 1, 21))
+    plt.legend()
+    plt.title(title)
+    plt.grid()
+    if savefig_path:
+        plt.savefig(savefig_path)
+    if show_img:
+        # 可选择是否显示图片。
+        plt.show()
 
 
 def show_training_log(log_csv):
     df = pd.read_csv(log_csv)
     columns = df.columns
     print(columns)
+
 
 def get_input_data(f_obj, tmp_keys, transform, is_train):
     images = []

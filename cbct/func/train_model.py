@@ -83,7 +83,7 @@ def train_generator(model_def, model_saved_path, h5_data_path, batch_size, epoch
         print("Model created.")
 
     dataset = DataSet(h5_data_path, val_fold_nb=0)
-    x_train, y_train = dataset.prepare_stage2_data(mode="train")
+    x_train, y_train = dataset.prepare_2channels_output_data(mode="train")
     print(x_train.shape)
     print(y_train.shape)
     datagen_train = ImageDataGenerator(
@@ -98,7 +98,7 @@ def train_generator(model_def, model_saved_path, h5_data_path, batch_size, epoch
     )
     train_data_generator = datagen_train.flow(x_train, y_train, batch_size, shuffle=True)
 
-    x_val, y_val = dataset.prepare_stage2_data(mode="val")
+    x_val, y_val = dataset.prepare_2channels_output_data(mode="val")
     datagen_val = ImageDataGenerator(
         featurewise_center=False,
         featurewise_std_normalization=False,
@@ -159,13 +159,13 @@ def train_generator(model_def, model_saved_path, h5_data_path, batch_size, epoch
 
 
 def __main():
-    model_weights = "/home/jzhang/helloworld/mtcnn/cb/model_weights/inception_v4_stage1.h5"
-    model_saved_path = "/home/jzhang/helloworld/mtcnn/cb/model_weights/inception_v4_stage2.h5"
+    model_weights = "/home/jzhang/helloworld/mtcnn/cb/model_weights/inception_resnet_v2_all_train_1.h5"
+    model_saved_path = "/home/jzhang/helloworld/mtcnn/cb/model_weights/inception_v4_fold0_2channels.h5"
     h5_data_path = "/home/jzhang/helloworld/mtcnn/cb/inputs/data_0717.hdf5"
-    model_def = get_inception_resnet_v2_unet_sigmoid(input_shape=(576, 576, 2), weights=None)
+    model_def = get_inception_resnet_v2_unet_sigmoid(input_shape=(576, 576, 1), weights=None, output_channels=2)
     # model_def = get_inception_resnet_v2_unet_sigmoid_stage1(weights="imagenet")
-    train_generator(model_def, model_saved_path, h5_data_path, batch_size=3, epochs=1000, model_weights=model_saved_path,
-                    gpus=1, verbose=2, csv_log_suffix="0")
+    train_generator(model_def, model_saved_path, h5_data_path, batch_size=3, epochs=1500, model_weights=model_weights,
+                    gpus=1, verbose=2, csv_log_suffix="_")
 
 
 if __name__ == '__main__':

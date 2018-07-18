@@ -44,7 +44,7 @@ def check_baseline_accuracy():
 
 def __main():
     # check_baseline_accuracy()
-    learning_rate_scheduler_test()
+    do_show_training_log()
     pass
 
 
