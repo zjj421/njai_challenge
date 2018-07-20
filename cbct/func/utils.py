@@ -3,6 +3,7 @@
 # Created by zjj421 on 18-6-20
 # Task: 
 # Insights:
+import re
 import threading
 from datetime import datetime
 
@@ -16,42 +17,40 @@ import matplotlib.pyplot as plt
 import os
 
 
-def plot_output_fit(csv_path, savefig_path=None, show_img=False):
-    df = pd.read_csv(csv_path)
-    if "loss" in df.columns:
-        loss = df["loss"]
+def show_training_log(log_csv, fig_save_path=None, show_columns=None, epochs=None):
+    assert isinstance(epochs, int) or epochs is None
+    # cnames = ["blue", "green", "red", "cyan", "magenta", "yellow", "black"]
+    cnames = ["b", "g", "r", "c", "m", "y", "k"]
+    df = pd.read_csv(log_csv)
+    print(df.head())
+    columns = list(df.columns)
+    assert len(columns) // 2 <= len(cnames)
+    if show_columns:
+        assert len(np.setdiff1d(show_columns, columns)) == 0
+        train_columns = show_columns
+        val_columns = ["val_" + x for x in train_columns]
     else:
-        loss = None
-    if "val_loss" in df.columns:
-        val_loss = df["val_loss"]
-    else:
-        val_loss = None
-    title = os.path.splitext(os.path.basename(csv_path))[0]
-    len_ = len(loss)
-    # np.linspace(start, end, num): [start, end],总共num个刻度, 步长 = (end - start) / (num - 1)
-    x = np.linspace(1, len_, len_)
-    if "loss" in df.columns:
-        plt.plot(x, loss, "r", label='loss')
-    if "val_loss" in df.columns:
-        plt.plot(x, val_loss, "g", label='val_loss')
-
-    plt.xlabel("epochs")
-    plt.ylabel("error")
+        split = len(columns) // 2 + 1
+        train_columns = columns[1:split]
+        val_columns = columns[split:]
+    # print(len(train_columns))
+    # print(len(val_columns))
+    x = list(df[columns[0]])[:epochs]
+    for i in range(len(train_columns)):
+        plt.plot(x, df[train_columns[i]][:epochs], cnames[i] + "--", label=train_columns[i])
+        plt.plot(x, df[val_columns[i]][:epochs], cnames[i] + "-", label=val_columns[i])
     # plt.yticks(np.linspace(0, 1, 21))
+    plt.xlabel("epochs")
+    plt.ylabel("metrics")
     plt.legend()
+
+    title = os.path.splitext(os.path.basename(log_csv))[0]
     plt.title(title)
     plt.grid()
-    if savefig_path:
-        plt.savefig(savefig_path)
-    if show_img:
-        # 可选择是否显示图片。
+    if fig_save_path:
+        plt.savefig(fig_save_path)
+    else:
         plt.show()
-
-
-def show_training_log(log_csv):
-    df = pd.read_csv(log_csv)
-    columns = df.columns
-    print(columns)
 
 
 def get_input_data(f_obj, tmp_keys, transform, is_train):
@@ -81,14 +80,19 @@ def get_input_data(f_obj, tmp_keys, transform, is_train):
         return images
 
 
-def preprocess(inputs_array, mode="mask"):
+def de_preprocess(images):
+    images += 1.
+    images = images * 127.5
+    return images
+
+
+def preprocess(images, mode="mask"):
     assert mode in ["image", "mask"]
-    images = inputs_array / 127.5
-    images -= 1.
-    # images = inputs_array / 255
-    if mode == "mask":
-        images[images > 0.5] = 1
-        images[images <= 0.5] = 0
+    if mode == "image":
+        images = images / 127.5
+        images -= 1.
+    else:
+        images = np.where(images > 0.5, 1, 0)
     return images
 
 

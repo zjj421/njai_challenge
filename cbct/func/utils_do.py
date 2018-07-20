@@ -21,8 +21,8 @@ def learning_rate_scheduler_test():
 
 
 def do_show_training_log():
-    log_csv = "/home/jzhang/helloworld/mtcnn/cb/logs/inception_v4_stage1_stage1.csv"
-    show_training_log(log_csv)
+    log_csv = "/home/jzhang/helloworld/mtcnn/cb/logs/log_inception_v4_stage2_1.csv"
+    show_training_log(log_csv, fig_save_path="loss.png", show_columns=["acc"], epochs=200)
 
 
 def check_baseline_accuracy():
