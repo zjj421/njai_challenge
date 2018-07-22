@@ -98,7 +98,7 @@ def make_hdf5_database():
     f = h5py.File(hdf5_path, "w")
     grp_x = f.create_group("images")
     grp_y_0 = f.create_group("mask_0")
-    grp_y_2 = f.create_group("mask_1")
+    grp_y_1 = f.create_group("mask_1")
     file_basename_lst = next(os.walk(os.path.join(data_root, "train")))[2]
     image_file_path_lst = [os.path.join(data_root, "train", x) for x in file_basename_lst]
     mask_0_file_path_lst = [os.path.join(data_root, "label", x) for x in file_basename_lst]
@@ -111,12 +111,12 @@ def make_hdf5_database():
         # 保存image,原样保存。
         image = cv2.imread(image_file_path_lst[i], cv2.IMREAD_UNCHANGED)
         grp_x.create_dataset(idx, dtype=np.uint8, data=image)  # [0, 255]
-        # 保存mask_tooth_root,只保存灰度图片 [0 or 255]
+        # 保存mask_tooth_root,只保存灰度图片. [0 or 255]
         mask_0 = cv2.imread(mask_0_file_path_lst[i], cv2.IMREAD_GRAYSCALE)
         grp_y_0.create_dataset(idx, dtype=np.uint8, data=mask_0)
-        # 保存mask_gum,只保存灰度图片.[0 or 255]
+        # 保存mask_gum,只保存灰度图片. [0 or 255]
         mask_1 = cv2.imread(mask_1_file_path_lst[i], cv2.IMREAD_GRAYSCALE)
-        grp_y_2.create_dataset(idx, dtype=np.uint8, data=mask_1)
+        grp_y_1.create_dataset(idx, dtype=np.uint8, data=mask_1)
 
 def add_k_fold_map_hdf5():
     hdf5_path = "/home/topsky/helloworld/study/njai_challenge/cbct/inputs/data_0717.hdf5"

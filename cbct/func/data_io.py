@@ -20,7 +20,6 @@ def get_masks(f_obj, tmp_keys, mask_nb):
         masks.append(mask)
     masks = np.array(masks)
     masks = np.expand_dims(masks, axis=-1)
-    masks = preprocess(masks, mode="mask")
     return masks
 
 
@@ -34,7 +33,6 @@ def get_images(f_obj, tmp_keys):
         images.append(image)
     images = np.array(images)
     images = np.expand_dims(images, axis=-1)
-    images = preprocess(images, mode="image")
     return images
 
 
@@ -72,7 +70,11 @@ class DataSet(object):
         else:
             keys = self.val_keys
         images = get_images(self.f_h5, keys)
+        images = preprocess(images, mode="image")
+
         masks = get_masks(self.f_h5, keys, 1)
+        masks = preprocess(masks, mode="mask")
+
         return images, masks
 
     def prepare_stage2_data(self, mode):
@@ -82,9 +84,13 @@ class DataSet(object):
         else:
             keys = self.val_keys
         images = get_images(self.f_h5, keys)
+        images = preprocess(images, mode="image")
+
         stage1_predict_masks = get_stage1_predict_masks(self.f_h5, keys)
         images = np.concatenate([images, stage1_predict_masks], axis=-1)
         masks = get_masks(self.f_h5, keys, 0)
+        masks = preprocess(masks, mode="mask")
+
         return images, masks
 
     def prepare_2channels_output_data(self, mode):
@@ -94,10 +100,17 @@ class DataSet(object):
         else:
             keys = self.val_keys
         images = get_images(self.f_h5, keys)
+        images = preprocess(images, mode="image")
+
         masks_0 = get_masks(self.f_h5, keys, 0)
         masks_1 = get_masks(self.f_h5, keys, 1)
         masks = np.concatenate([masks_0, masks_1], axis=-1)
+        masks = preprocess(masks, mode="mask")
         return images, masks
+
+    def get_image_by_key(self, key):
+        image = get_images(self.f_h5, [key])
+        return image
 
 
 def __main():

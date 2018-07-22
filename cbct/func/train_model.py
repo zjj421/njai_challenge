@@ -11,17 +11,18 @@ import keras.backend.tensorflow_backend as KTF
 import pandas as pd
 import tensorflow as tf
 from keras import metrics
-from keras.callbacks import ModelCheckpoint, CSVLogger, LearningRateScheduler
+from keras.callbacks import ModelCheckpoint, CSVLogger, LearningRateScheduler, TensorBoard
 from keras.engine.saving import load_model, save_model
-from keras.optimizers import Adam
+from keras.optimizers import Adam, SGD
 from keras.preprocessing.image import ImageDataGenerator
 from keras.utils import multi_gpu_model
 from tqdm import tqdm
 
 from func.config import Config
 from func.data_io import DataSet
-from func.model_inception_resnet_v2 import sigmoid_dice_stage1_loss, get_inception_resnet_v2_unet_sigmoid, \
+from func.model_inception_resnet_v2 import sigmoid_dice_loss_1channel_output, get_inception_resnet_v2_unet_sigmoid, \
     dice_coef_rounded_ch0, dice_coef_rounded_ch1, sigmoid_dice_loss
+from func.utils import mean_iou_ch0
 from zf_unet_576_model import dice_coef
 
 CONFIG = Config()
@@ -51,15 +52,18 @@ def train_generator(model_def, model_saved_path, h5_data_path, batch_size, epoch
                     csv_log_suffix="0", fold_k=0):
     learning_rate_scheduler = LearningRateScheduler(schedule=get_learning_rate_scheduler, verbose=0)
     opt = Adam(amsgrad=True)
+    # opt = SGD()
     log_path = os.path.join(CONFIG.log_root, "log_" + os.path.splitext(os.path.basename(model_saved_path))[
         0]) + "_" + csv_log_suffix + ".csv"
     csv_logger = CSVLogger(log_path, append=True)
 
-    fit_metrics = [dice_coef, metrics.binary_crossentropy, "acc"]
-    fit_loss = sigmoid_dice_stage1_loss
+    # tensorboard = TensorBoard(log_dir='/home/jzhang/helloworld/mtcnn/cb/logs/tensorboard', write_images=True)
 
-    # fit_loss = sigmoid_dice_loss
-    # fit_metrics = [dice_coef_rounded_ch0, dice_coef_rounded_ch1, metrics.binary_crossentropy, "acc"]
+    # fit_metrics = [dice_coef, metrics.binary_crossentropy, "acc"]
+    # fit_loss = sigmoid_dice_loss_1channel_output
+
+    fit_loss = sigmoid_dice_loss
+    fit_metrics = [dice_coef_rounded_ch0, dice_coef_rounded_ch1, metrics.binary_crossentropy, mean_iou_ch0, "acc"]
     # fit_metrics = [dice_coef_rounded_ch0, metrics.binary_crossentropy, mean_iou_ch0]
     # es = EarlyStopping('val_acc', patience=30, mode="auto", min_delta=0.0)
     # reduce_lr = ReduceLROnPlateau(monitor='val_acc', factor=0.1, patience=20, verbose=2, epsilon=1e-4,
@@ -71,11 +75,12 @@ def train_generator(model_def, model_saved_path, h5_data_path, batch_size, epoch
         try:
             model.load_weights(model_weights, by_name=True)
         except:
-            stage1_model = get_inception_resnet_v2_unet_sigmoid(weights=None)
-            for i in tqdm(range(2, len(stage1_model.layers) - 1)):
-                model.layers[i].set_weights(stage1_model.layers[i].get_weights())
-                model.layers[i].trainable = False
-            save_model(model, model_saved_path, include_optimizer=False)
+            exit()
+            # stage1_model = get_inception_resnet_v2_unet_sigmoid(weights=None)
+            # for i in tqdm(range(2, len(stage1_model.layers) - 1)):
+            #     model.layers[i].set_weights(stage1_model.layers[i].get_weights())
+            #     model.layers[i].trainable = False
+            # save_model(model, model_saved_path, include_optimizer=False)
         print("Model weights {} have been loaded.".format(model_weights))
         # stage1_model = get_inception_resnet_v2_unet_sigmoid(weights=None)
         # for i in tqdm(range(2, len(stage1_model.layers) - 1)):
@@ -85,11 +90,11 @@ def train_generator(model_def, model_saved_path, h5_data_path, batch_size, epoch
         print("Model created.")
 
     dataset = DataSet(h5_data_path, val_fold_nb=fold_k)
-    x_train, y_train = dataset.prepare_stage1_data(mode="train")
+    x_train, y_train = dataset.prepare_2channels_output_data(mode="train")
     print(x_train.shape)
     print(y_train.shape)
     datagen_train = ImageDataGenerator(
-        rotation_range=0.2,
+        rotation_range=20,
         width_shift_range=0.05,
         height_shift_range=0.05,
         horizontal_flip=True,
@@ -100,7 +105,7 @@ def train_generator(model_def, model_saved_path, h5_data_path, batch_size, epoch
     )
     train_data_generator = datagen_train.flow(x_train, y_train, batch_size, shuffle=True)
 
-    x_val, y_val = dataset.prepare_stage1_data(mode="val")
+    x_val, y_val = dataset.prepare_2channels_output_data(mode="val")
     datagen_val = ImageDataGenerator(
         featurewise_center=False,
         featurewise_std_normalization=False,
@@ -149,37 +154,38 @@ def train_generator(model_def, model_saved_path, h5_data_path, batch_size, epoch
 def __main():
     h5_data_path = "/home/jzhang/helloworld/mtcnn/cb/inputs/data_0717.hdf5"
     # model_weights = "/home/jzhang/helloworld/mtcnn/cb/model_weights/inception_resnet_v2_all_train_1.h5"
-    model_saved_path = "/home/jzhang/helloworld/mtcnn/cb/model_weights/inception_v4_stage1_fold1.h5"
-    model_def = get_inception_resnet_v2_unet_sigmoid(input_shape=(576, 576, 1), weights="imagenet", output_channels=1)
-    train_generator(model_def, model_saved_path, h5_data_path, batch_size=3, epochs=200, model_weights=None,
-                    gpus=1, verbose=2, csv_log_suffix="0", fold_k=1)
-    K.clear_session()
-
-    # model_saved_path = "/home/jzhang/helloworld/mtcnn/cb/model_weights/inception_v4_stage1_fold1.h5"
-    model_def = get_inception_resnet_v2_unet_sigmoid(input_shape=(576, 576, 1), weights="imagenet", output_channels=1)
+    model_saved_path = "/home/jzhang/helloworld/mtcnn/cb/model_weights/inception_resnet_v2_fold1_2channels.h5"
+    model_def = get_inception_resnet_v2_unet_sigmoid(input_shape=(576, 576, 1), weights=None, output_channels=2)
     train_generator(model_def, model_saved_path, h5_data_path, batch_size=3, epochs=1000,
                     model_weights=model_saved_path,
-                    gpus=1, verbose=2, csv_log_suffix="1", fold_k=1)
+                    gpus=1, verbose=2, csv_log_suffix="4", fold_k=1)
+    # K.clear_session()
 
-    K.clear_session()
-
-    model_saved_path = "/home/jzhang/helloworld/mtcnn/cb/model_weights/inception_v4_stage1_fold2.h5"
-    model_def = get_inception_resnet_v2_unet_sigmoid(input_shape=(576, 576, 1), weights="imagenet", output_channels=1)
-    train_generator(model_def, model_saved_path, h5_data_path, batch_size=3, epochs=200, model_weights=None,
-                    gpus=1, verbose=2, csv_log_suffix="0", fold_k=2)
-
-    K.clear_session()
-    # model_saved_path = "/home/jzhang/helloworld/mtcnn/cb/model_weights/inception_v4_stage1_fold2.h5"
-    model_def = get_inception_resnet_v2_unet_sigmoid(input_shape=(576, 576, 1), weights="imagenet", output_channels=1)
-    train_generator(model_def, model_saved_path, h5_data_path, batch_size=3, epochs=1000, model_weights=model_saved_path,
-                    gpus=1, verbose=2, csv_log_suffix="1", fold_k=2)
-    K.clear_session()
+    # model_saved_path = "/home/jzhang/helloworld/mtcnn/cb/model_weights/inception_resnet_v2_stage1_fold1.h5"
+    # model_def = get_inception_resnet_v2_unet_sigmoid(input_shape=(576, 576, 2), weights=None, output_channels=1)
+    # train_generator(model_def, model_saved_path, h5_data_path, batch_size=3, epochs=1000,
+    #                 model_weights=model_saved_path,
+    #                 gpus=1, verbose=2, csv_log_suffix="1_0", fold_k=1)
+    #
+    # K.clear_session()
+    #
+    # model_saved_path = "/home/jzhang/helloworld/mtcnn/cb/model_weights/inception_resnet_v2_stage1_fold2.h5"
+    # model_def = get_inception_resnet_v2_unet_sigmoid(input_shape=(576, 576, 1), weights="imagenet", output_channels=1)
+    # train_generator(model_def, model_saved_path, h5_data_path, batch_size=3, epochs=200, model_weights=None,
+    #                 gpus=1, verbose=2, csv_log_suffix="0", fold_k=2)
+    #
+    # K.clear_session()
+    # # model_saved_path = "/home/jzhang/helloworld/mtcnn/cb/model_weights/inception_resnet_v2_stage1_fold2.h5"
+    # model_def = get_inception_resnet_v2_unet_sigmoid(input_shape=(576, 576, 1), weights=None, output_channels=1)
+    # train_generator(model_def, model_saved_path, h5_data_path, batch_size=3, epochs=1000, model_weights=model_saved_path,
+    #                 gpus=1, verbose=2, csv_log_suffix="1", fold_k=2)
+    # K.clear_session()
 
 
 if __name__ == '__main__':
     start = datetime.now()
     print("Start time is {}".format(start))
-    os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "2"
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
     sess = tf.Session(config=config)

@@ -39,7 +39,6 @@ def show_training_log(log_csv, fig_save_path=None, show_columns=None, epochs=Non
     for i in range(len(train_columns)):
         plt.plot(x, df[train_columns[i]][:epochs], cnames[i] + "--", label=train_columns[i])
         plt.plot(x, df[val_columns[i]][:epochs], cnames[i] + "-", label=val_columns[i])
-    # plt.yticks(np.linspace(0, 1, 21))
     plt.xlabel("epochs")
     plt.ylabel("metrics")
     plt.legend()

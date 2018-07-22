@@ -66,15 +66,27 @@ class ModelDeployment(object):
             stage1_predict_masks_grp.create_dataset(key, dtype=np.float32, data=masks[i])
         print("Done.")
 
-    def predict_and_show(self, img_path):
-        images = self.read_images([img_path])
-        images = preprocess(images, mode="image")
+    def predict_and_show(self, images, output_channels=1):
+        if isinstance(images, str):
+            images_src = self.read_images([images])
+        else:
+            images_src = images
+        images = preprocess(images_src, mode="image")
         predict_mask = self.predict(images, 1)
-        print(predict_mask.shape)
-        result = np.squeeze(predict_mask, axis=[0, -1])
-        print(result.shape)
-        # result = preprocess(result, mode="mask")
-        plt.imshow(result)
+        result = np.squeeze(predict_mask, axis=0)
+        if output_channels == 2:
+            result0 = result[..., 0]
+            result0 = preprocess(result0, mode="mask")
+            result0 = np.where(result0 > 0, 255, 0)
+            result1 = result[..., 1]
+            result1 = preprocess(result1, mode="mask")
+            result1 = np.where(result1 > 0, 255, 0)
+            result = np.concatenate((np.squeeze(images_src, axis=[0, -1]), result0, result1), axis=1)
+            plt.imshow(result, cmap="gray")
+        else:
+            plt.imshow(result, cmap="gray")
+
+
         plt.show()
 
     def read_images(self, image_path_lst):
@@ -130,7 +142,8 @@ class ModelDeployment(object):
 def inference_2stages(model_def_stage1, model_weights_stage1, model_def_stage2, model_weights_stage2, h5_data_path,
                       val_fold_nb, pred_save_dir, image_masks_save_dir):
     dataset = DataSet(h5_data_path, val_fold_nb)
-    keys = dataset.val_keys
+    # keys = dataset.val_keys
+    keys = dataset.train_keys
     images = get_images(dataset.f_h5, keys)
     if len(get_file_path_list(pred_save_dir, ".npy")) == 0:
         model = model_def_stage1
@@ -173,36 +186,42 @@ def inference_2stages(model_def_stage1, model_weights_stage1, model_def_stage2, 
 
 def do_infer_2stages():
     model_def_stage1 = get_inception_resnet_v2_unet_sigmoid(input_shape=(576, 576, 1), weights=None, output_channels=1)
-    model_weights_stage1 = "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/inception_v4_stage1.h5"
+    model_weights_stage1 = "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/inception_resnet_v2_stage1_fold1.h5"
     model_def_stage2 = get_inception_resnet_v2_unet_sigmoid(input_shape=(576, 576, 2), weights=None, output_channels=1)
-    model_weights_stage2 = "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/inception_v4_stage2.h5"
+    model_weights_stage2 = "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/inception_resnet_v2_stage2_fold1.h5"
     h5_data_path = "/home/topsky/helloworld/study/njai_challenge/cbct/inputs/data_0717.hdf5"
-    val_fold_nb = 0
-    pred_save_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/pred_masks_2stage_0720"
-    image_masks_save_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/pred_image_masks_2stage_0720"
+    val_fold_nb = 1
+    pred_save_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/pred_masks_2stage_fold1_train_0721"
+    image_masks_save_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/pred_image_masks_2stage_fold1_train_0721"
     inference_2stages(model_def_stage1, model_weights_stage1, model_def_stage2, model_weights_stage2, h5_data_path,
                       val_fold_nb, pred_save_dir, image_masks_save_dir)
 
 
 def infer_do():
-    # model_path = "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/inception_resnet_v2_all_train_1.h5"
-    model_path = "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/inception_v4_stage1_fold2.h5"
+    model_path = "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/inception_resnet_v2_all_train_1.h5"
+    # model_path = "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/inception_resnet_v2_fold1_2channels.h5"
     # image_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/train"
     # pred_mask_image_save_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/pred_mask_stage1"
     # image_path_lst = get_file_path_list(image_dir)
     h5_data_path = "/home/topsky/helloworld/study/njai_challenge/cbct/inputs/data_0717.hdf5"
     h5_predicted_masks_saved_path = "/home/topsky/helloworld/study/njai_challenge/cbct/inputs/predicted_masks_data_0717.hdf5"
 
-    model_def = get_inception_resnet_v2_unet_sigmoid(weights=None)
+    model_def = get_inception_resnet_v2_unet_sigmoid(weights=None, output_channels=2)
     model = ModelDeployment(model_def, model_path)
-    model.predict_and_show("/media/topsky/HHH/jzhang_root/data/njai/cbct/train/021.tif")
+
+    dataset = DataSet(h5_data_path, val_fold_nb=1)
+    keys = dataset.train_keys
+    images = dataset.get_image_by_key(keys[1])
+
+    model.predict_and_show(images, output_channels=2)
     # model.predict_and_save_stage1_masks(h5_data_path, h5_predicted_masks_saved_path, fold_k=2, batch_size=4)
     # model.predict_and_save_image_masks(image_path_lst, pred_mask_image_save_dir, batch_size=4, color=None, alpha=0.5)
 
 
 def __main():
     np.set_printoptions(threshold=np.inf)
-    do_infer_2stages()
+    # do_infer_2stages()
+    infer_do()
 
 
 if __name__ == '__main__':
