@@ -42,7 +42,7 @@ def softmax_dice_loss(y_true, y_pred):
         y_true[..., 1], y_pred[..., 1]) * 0.2
 
 
-def sigmoid_dice_stage1_loss(y_true, y_pred):
+def sigmoid_dice_loss_1channel_output(y_true, y_pred):
     return binary_crossentropy(y_true, y_pred) * 0.6 + dice_coef_loss(y_true,
                                                                       y_pred) * 0.4
 
