@@ -96,6 +96,7 @@ def k_fold_test():
     for i in k_fold_map.keys():
         print(i, len(k_fold_map[i]))
 
+
 def read_h5_test():
     h5_data_path = "/home/topsky/helloworld/study/njai_challenge/cbct/inputs/data_0717.hdf5"
     f_h5 = h5py.File(h5_data_path, 'r+')
@@ -107,9 +108,21 @@ def read_h5_test():
         print(mask.shape)
         exit()
 
+
+def read_image_test():
+    img_path = "/media/zj/share/data/njai_2018/cbct/train/001.tif"
+    img1 = Image.open(img_path).convert("L")
+    img1 = np.array(img1)
+    print(img1.shape)
+    img2 = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
+    print(img2.shape)
+    print(img1.all() == img2.all())
+
+
 def __main():
     np.set_printoptions(threshold=np.inf)
-    read_h5_test()
+    # read_h5_test()
+    read_image_test()
     pass
 
 
