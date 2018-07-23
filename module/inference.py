@@ -13,11 +13,14 @@ import scipy.misc
 from PIL import Image
 from cbct.func.model_inception_resnet_v2 import get_inception_resnet_v2_unet_sigmoid
 from cbct.func.utils import preprocess, de_preprocess
-from func.data_io import DataSet, get_images
+from func.data_io import DataSet, get_images, get_masks
+from func.model_inception_resnet_v2_gn import get_inception_resnet_v2_unet_sigmoid_gn
 from keras.models import load_model
 from matplotlib import pyplot as plt
 from tqdm import tqdm
 import keras.backend as K
+import tensorflow as tf
+from module.competition_utils import get_pixel_wise_acc
 from module.utils_public import apply_mask, get_file_path_list
 
 
@@ -84,8 +87,11 @@ class ModelDeployment(object):
             result = np.concatenate((np.squeeze(images_src, axis=[0, -1]), result0, result1), axis=1)
             plt.imshow(result, cmap="gray")
         else:
+            result = np.squeeze(result, axis=-1)
+            result = preprocess(result, mode="mask")
+            result = np.where(result > 0, 255, 0)
+            result = np.concatenate((np.squeeze(images_src, axis=[0, -1]), result), axis=1)
             plt.imshow(result, cmap="gray")
-
 
         plt.show()
 
@@ -137,6 +143,37 @@ class ModelDeployment(object):
         plt.figure()
         plt.imshow(image)
         plt.show()
+
+
+def do_get_acc():
+    model_def = get_inception_resnet_v2_unet_sigmoid(weights=None, output_channels=2)
+    model_weights = "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/inception_resnet_v2_all_train_1.h5"
+    # model_weights = "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/final_inception_resnet_v2_gn_fold1_2channels.h5"
+    h5_data_path = "/home/topsky/helloworld/study/njai_challenge/cbct/inputs/data_0717.hdf5"
+    val_fold_nb = 1
+    get_acc(model_def, model_weights, h5_data_path, val_fold_nb, 2)
+
+
+def get_acc(model_def, model_weights, h5_data_path, val_fold_nb, output_channels=1):
+    dataset = DataSet(h5_data_path, val_fold_nb)
+    keys = dataset.val_keys
+    # y_pred = np.zeros(shape=(37, 576, 576, 1), dtype=np.float64)
+    # keys = dataset.train_keys
+    images = get_images(dataset.f_h5, keys)
+
+    model = model_def
+    print("Loading weights ...")
+    model.load_weights(model_weights)
+    y_pred = model.predict(images, 4)
+    if output_channels == 2:
+        y_pred = y_pred[..., 0]
+    print(y_pred.shape)
+    y_true = get_masks(dataset.f_h5, keys, mask_nb=0)
+    y_true = preprocess(y_true, mode="mask")
+
+    acc = get_pixel_wise_acc(y_true.astype(np.float64), y_pred.astype(np.float64))
+    with tf.Session() as sess:
+        print(sess.run(acc))
 
 
 def inference_2stages(model_def_stage1, model_weights_stage1, model_def_stage2, model_weights_stage2, h5_data_path,
@@ -198,20 +235,20 @@ def do_infer_2stages():
 
 
 def infer_do():
-    model_path = "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/inception_resnet_v2_all_train_1.h5"
-    # model_path = "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/inception_resnet_v2_fold1_2channels.h5"
+    # model_path = "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/final_inception_resnet_v2_gn_fold1_1i_1o.h5"
+    model_path = "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/final_inception_resnet_v2_gn_fold1_2channels.h5"
     # image_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/train"
     # pred_mask_image_save_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/pred_mask_stage1"
     # image_path_lst = get_file_path_list(image_dir)
     h5_data_path = "/home/topsky/helloworld/study/njai_challenge/cbct/inputs/data_0717.hdf5"
-    h5_predicted_masks_saved_path = "/home/topsky/helloworld/study/njai_challenge/cbct/inputs/predicted_masks_data_0717.hdf5"
+    # h5_predicted_masks_saved_path = "/home/topsky/helloworld/study/njai_challenge/cbct/inputs/predicted_masks_data_0717.hdf5"
 
-    model_def = get_inception_resnet_v2_unet_sigmoid(weights=None, output_channels=2)
+    model_def = get_inception_resnet_v2_unet_sigmoid_gn(weights=None, output_channels=2)
     model = ModelDeployment(model_def, model_path)
 
     dataset = DataSet(h5_data_path, val_fold_nb=1)
-    keys = dataset.train_keys
-    images = dataset.get_image_by_key(keys[1])
+    keys = dataset.val_keys
+    images = dataset.get_image_by_key(keys[8])
 
     model.predict_and_show(images, output_channels=2)
     # model.predict_and_save_stage1_masks(h5_data_path, h5_predicted_masks_saved_path, fold_k=2, batch_size=4)
@@ -221,11 +258,12 @@ def infer_do():
 def __main():
     np.set_printoptions(threshold=np.inf)
     # do_infer_2stages()
+    # do_get_acc()
     infer_do()
 
 
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
     start = datetime.now()
     print("Start time is {}".format(start))
