@@ -93,7 +93,7 @@ class DataSet(object):
 
         return images, masks
 
-    def prepare_2channels_output_data(self, mode):
+    def prepare_1i_2o_data(self, mode):
         assert mode in ["train", "val"]
         if mode == "train":
             keys = self.train_keys
@@ -108,7 +108,7 @@ class DataSet(object):
         masks = preprocess(masks, mode="mask")
         return images, masks
 
-    def prepate_1i_1o_data(self, mode):
+    def prepare_1i_1o_data(self, mode):
         assert mode in ["train", "val"]
         if mode == "train":
             keys = self.train_keys

@@ -6,25 +6,20 @@
 
 import os
 from datetime import datetime
+
 import keras.backend as K
-import keras.backend.tensorflow_backend as KTF
 import pandas as pd
-import tensorflow as tf
 from keras import metrics
-from keras.callbacks import ModelCheckpoint, CSVLogger, LearningRateScheduler, TensorBoard
-from keras.engine.saving import load_model, save_model
-from keras.optimizers import Adam, SGD
+from keras.callbacks import ModelCheckpoint, CSVLogger, LearningRateScheduler
+from keras.optimizers import Adam
 from keras.preprocessing.image import ImageDataGenerator
 from keras.utils import multi_gpu_model
-from tqdm import tqdm
 
 from func.config import Config
 from func.data_io import DataSet
-from func.model_inception_resnet_v2 import sigmoid_dice_loss_1channel_output, get_inception_resnet_v2_unet_sigmoid, \
+from func.model_inception_resnet_v2 import get_inception_resnet_v2_unet_sigmoid, \
     dice_coef_rounded_ch0, dice_coef_rounded_ch1, sigmoid_dice_loss, binary_acc_ch0
-from func.model_inception_resnet_v2_gn import get_inception_resnet_v2_unet_sigmoid_gn
 from func.utils import mean_iou_ch0
-from zf_unet_576_model import dice_coef
 
 CONFIG = Config()
 
@@ -78,44 +73,53 @@ def train_generator(model_def, model_saved_path, h5_data_path, batch_size, epoch
         model = model_def
         print("Loading weights ...")
         model.load_weights(model_weights, by_name=True, skip_mismatch=True)
-        # stage1_model = get_inception_resnet_v2_unet_sigmoid(weights=None)
-        # for i in tqdm(range(2, len(stage1_model.layers) - 1)):
-        #     model.layers[i].set_weights(stage1_model.layers[i].get_weights())
-        #     model.layers[i].trainable = False
-        # save_model(model, model_saved_path, include_optimizer=False)
         print("Model weights {} have been loaded.".format(model_weights))
-        # stage1_model = get_inception_resnet_v2_unet_sigmoid(weights=None)
-        # for i in tqdm(range(2, len(stage1_model.layers) - 1)):
-        #     model.layers[i].trainable = False
     else:
         model = model_def
         print("Model created.")
 
+    # prepare train and val data.
     dataset = DataSet(h5_data_path, val_fold_nb=fold_k)
-    x_train, y_train = dataset.prepate_1i_1o_data(mode="train")
+    x_train, y_train = dataset.prepare_1i_2o_data(mode="train")
     print(x_train.shape)
     print(y_train.shape)
-    datagen_train = ImageDataGenerator(
-        rotation_range=20,
-        width_shift_range=0.05,
-        height_shift_range=0.05,
-        horizontal_flip=True,
-        # vertical_flip=True,
-        # brightness_range=0.2,
-        shear_range=0.05,
-        zoom_range=0.05,
-    )
-    train_data_generator = datagen_train.flow(x_train, y_train, batch_size, shuffle=True)
+    # we create two instances with the same arguments
+    train_data_gen_args = dict(featurewise_center=False,
+                               featurewise_std_normalization=False,
+                               rotation_range=20,
+                               width_shift_range=0.05,
+                               height_shift_range=0.05,
+                               horizontal_flip=True,
+                               # vertical_flip=True,
+                               # brightness_range=0.2,
+                               shear_range=0.05,
+                               zoom_range=0.05, )
+    train_image_datagen = ImageDataGenerator(**train_data_gen_args)
+    train_mask_datagen = ImageDataGenerator(**train_data_gen_args)
+    # Provide the same seed and keyword arguments to the fit and flow methods
+    seed = 1248
+    # train_image_datagen.fit(x_train, augment=True, seed=seed)
+    # train_mask_datagen.fit(y_train, augment=True, seed=seed)
+    train_image_generator = train_image_datagen.flow(x_train, None, batch_size, shuffle=True, seed=seed)
+    train_mask_generator = train_mask_datagen.flow(y_train, None, batch_size, shuffle=True, seed=seed)
+    # combine generators into one which yields image and masks
+    train_data_generator = zip(train_image_generator, train_mask_generator)
 
-    x_val, y_val = dataset.prepate_1i_1o_data(mode="val")
-    datagen_val = ImageDataGenerator(
-        featurewise_center=False,
-        featurewise_std_normalization=False,
-        rotation_range=0.,
-        width_shift_range=0.,
-        height_shift_range=0.,
-        horizontal_flip=False)
-    val_data_generator = datagen_val.flow(x_val, y_val, batch_size, shuffle=False)
+    x_val, y_val = dataset.prepare_1i_2o_data(mode="val")
+    print(x_val.shape)
+    print(y_val.shape)
+    # no val augmentation.
+    val_data_gen_args = dict(featurewise_center=False,
+                             featurewise_std_normalization=False,
+                             rotation_range=0.,
+                             width_shift_range=0.,
+                             height_shift_range=0.,
+                             horizontal_flip=False)
+    val_image_datagen = ImageDataGenerator(**val_data_gen_args)
+    val_mask_datagen = ImageDataGenerator(**val_data_gen_args)
+    val_image_generator = val_image_datagen.flow(x_val, None, batch_size, shuffle=False, seed=seed)
+    val_mask_generator = val_mask_datagen.flow(y_val, None, batch_size, shuffle=False, seed=seed)
+    val_data_generator = zip(val_image_generator, val_mask_generator)
 
     if gpus > 1:
         parallel_model = multi_gpu_model(model, gpus=gpus)
@@ -131,11 +135,13 @@ def train_generator(model_def, model_saved_path, h5_data_path, batch_size, epoch
                            metrics=fit_metrics)
     model.summary()
 
+    count_train = x_train.shape[0]
+    count_val = x_val.shape[0]
     hist = parallel_model.fit_generator(
         train_data_generator,
         validation_data=val_data_generator,
-        # steps_per_epoch=count_train // batch_size,
-        # validation_steps=count_val // batch_size,
+        steps_per_epoch=count_train // batch_size,
+        validation_steps=count_val // batch_size,
         epochs=epochs,
         callbacks=[model_checkpoint, csv_logger, learning_rate_scheduler],
         verbose=verbose,
@@ -166,7 +172,7 @@ def __main():
                                                      output_channels=2)
     train_generator(model_def, model_saved_path, h5_data_path, batch_size=3, epochs=300,
                     model_weights=model_weights,
-                    gpus=1, verbose=2, csv_log_suffix="0", fold_k=1)
+                    gpus=1, verbose=2, csv_log_suffix="0724_0", fold_k=1)
     K.clear_session()
 
     # model_saved_path = "/home/jzhang/helloworld/mtcnn/cb/model_weights/inception_resnet_v2_stage1_fold1.h5"
