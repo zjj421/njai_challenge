@@ -22,7 +22,7 @@ def learning_rate_scheduler_test():
 
 
 def do_show_training_log():
-    log_csv = "/home/topsky/helloworld/study/njai_challenge/cbct/logs/log_inception_resnet_v2_gn_fold1_1i_1o_0.csv"
+    log_csv = ""
     show_training_log(log_csv, fig_save_path=None, show_columns=None, epochs=200)
 
 

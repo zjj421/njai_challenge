@@ -19,6 +19,7 @@ from func.config import Config
 from func.data_io import DataSet
 from func.model_inception_resnet_v2 import get_inception_resnet_v2_unet_sigmoid, \
     dice_coef_rounded_ch0, dice_coef_rounded_ch1, sigmoid_dice_loss, binary_acc_ch0
+from func.model_inception_resnet_v2_gn import get_inception_resnet_v2_unet_sigmoid_gn
 from func.utils import mean_iou_ch0
 
 CONFIG = Config()
@@ -80,7 +81,7 @@ def train_generator(model_def, model_saved_path, h5_data_path, batch_size, epoch
 
     # prepare train and val data.
     dataset = DataSet(h5_data_path, val_fold_nb=fold_k)
-    x_train, y_train = dataset.prepare_1i_2o_data(mode="train")
+    x_train, y_train = dataset.prepare_1i_2o_data(is_train=True)
     print(x_train.shape)
     print(y_train.shape)
     # we create two instances with the same arguments
@@ -105,7 +106,7 @@ def train_generator(model_def, model_saved_path, h5_data_path, batch_size, epoch
     # combine generators into one which yields image and masks
     train_data_generator = zip(train_image_generator, train_mask_generator)
 
-    x_val, y_val = dataset.prepare_1i_2o_data(mode="val")
+    x_val, y_val = dataset.prepare_1i_2o_data(is_train=False)
     print(x_val.shape)
     print(y_val.shape)
     # no val augmentation.
@@ -167,8 +168,8 @@ def train_generator(model_def, model_saved_path, h5_data_path, batch_size, epoch
 def __main():
     h5_data_path = "/home/jzhang/helloworld/mtcnn/cb/inputs/data_0717.hdf5"
     model_weights = "/home/jzhang/helloworld/mtcnn/cb/model_weights/inception_resnet_v2_input1_output2_pretrained_weights.h5"
-    model_saved_path = "/home/jzhang/helloworld/mtcnn/cb/model_weights/inception_resnet_v2_bn_fold1_1i_2i.h5"
-    model_def = get_inception_resnet_v2_unet_sigmoid(input_shape=(576, 576, 1), weights=None,
+    model_saved_path = "/home/jzhang/helloworld/mtcnn/cb/model_weights/inception_resnet_v2_gn_fold1_1i_2o.h5"
+    model_def = get_inception_resnet_v2_unet_sigmoid_gn(input_shape=(576, 576, 1), weights=None,
                                                      output_channels=2)
     train_generator(model_def, model_saved_path, h5_data_path, batch_size=3, epochs=300,
                     model_weights=model_weights,

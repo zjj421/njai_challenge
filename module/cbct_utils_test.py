@@ -12,9 +12,15 @@ from pprint import pprint
 import cv2
 import numpy as np
 from PIL import Image
+from func.utils import show_training_log
 from matplotlib import pyplot as plt
 
 from module.utils_public import apply_mask
+
+
+def do_show_training_log():
+    log_csv = "/home/topsky/helloworld/study/njai_challenge/cbct/logs/log_inception_resnet_v2_bn_fold1_1i_2i_0724_0.csv"
+    show_training_log(log_csv, fig_save_path=None, show_columns=["dice_coef_rounded_ch0"], epochs=300)
 
 
 def show_image():
@@ -122,7 +128,7 @@ def read_image_test():
 def __main():
     np.set_printoptions(threshold=np.inf)
     # read_h5_test()
-    read_image_test()
+    do_show_training_log()
     pass
 
 

@@ -46,12 +46,9 @@ def get_pixel_wise_acc(y_true, y_pred):
     Returns: float.
 
     """
+    y_true = y_true.astype(np.float64)
+    y_pred = y_pred.astype(np.float64)
     return K.mean(K.equal(y_true.flatten(), K.round(y_pred.flatten())), axis=-1)
-
-
-
-
-
 
 
 def test_binary_acc():
@@ -66,7 +63,6 @@ def test_binary_acc():
     # y_pred = np.expand_dims(y_pred, axis=2)
     # y_pred = np.repeat(y_pred, repeats=2, axis=-1)
     # y_pred[0][0][1] = 0
-
 
     # print(y_true)
     print(y_pred)

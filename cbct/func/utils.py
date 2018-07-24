@@ -79,20 +79,7 @@ def get_input_data(f_obj, tmp_keys, transform, is_train):
         return images
 
 
-def de_preprocess(images):
-    images += 1.
-    images = images * 127.5
-    return images
 
-
-def preprocess(images, mode="mask"):
-    assert mode in ["image", "mask"]
-    if mode == "image":
-        images = images / 127.5
-        images -= 1.
-    else:
-        images = np.where(images > 0.5, 1, 0)
-    return images
 
 
 def prepare_all_data(h5_data_path, mode):
