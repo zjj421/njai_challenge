@@ -19,8 +19,8 @@ from module.utils_public import apply_mask
 
 
 def do_show_training_log():
-    log_csv = "/home/topsky/helloworld/study/njai_challenge/cbct/logs/log_inception_resnet_v2_bn_fold1_1i_2i_0724_0.csv"
-    show_training_log(log_csv, fig_save_path=None, show_columns=["dice_coef_rounded_ch0"], epochs=300)
+    log_csv = "/home/topsky/helloworld/study/njai_challenge/cbct/logs/log_inception_resnet_v2_gn_fold1_1i_2o_0724_0.csv"
+    show_training_log(log_csv, fig_save_path=None, show_columns=["binary_acc_ch0"], epochs=300)
 
 
 def show_image():

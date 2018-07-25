@@ -115,24 +115,27 @@ class DataSet(object):
         return keys
 
     @staticmethod
-    def de_preprocess(images):
-        images += 1.
-        images = images * 127.5
-        return images
+    def de_preprocess(images, mode="mask"):
+        if mode == "image":
+            imgs = images + 1.
+            imgs = imgs * 127.5
+        else:
+            imgs = np.where(images == 1, 255, 0)
+        return imgs
 
     @staticmethod
     def preprocess(images, mode="mask"):
         assert mode in ["image", "mask"]
         if mode == "image":
-            images = images / 127.5
-            images -= 1.
+            imgs = images / 127.5
+            imgs -= 1.
         else:
-            images = np.where(images > 0.5, 1, 0)
-        return images
+            imgs = np.where(images > 0.5, 1, 0)
+        return imgs
 
 
 def __main():
-    h5_data_path = "/home/jzhang/helloworld/mtcnn/cb/inputs/data_0717.hdf5"
+    h5_data_path = ""
     pass
 
 

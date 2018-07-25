@@ -38,67 +38,81 @@ class ModelDeployment(object):
         print('Test loss:', scores[0])
         print('Test accuracy:', scores[1])
 
-    # def predict_and_save_stage1_masks(self, h5_data_path, h5_result_saved_path, fold_k=0, batch_size=32):
-    #     """
-    #     从h5data中读取images进行预测，并把预测mask保存进h5data中。
-    #     Args:
-    #         h5_data_path: str, 存放有训练数据的h5文件路径。
-    #         batch_size: int, 批大小。
-    #
-    #     Returns: None.
-    #
-    #     """
-    #     f_h5 = h5py.File(h5_data_path, 'r+')
-    #     f_result = h5py.File(h5_result_saved_path, "a")
-    #     images_grp = f_h5["images"]
-    #     try:
-    #         stage1_predict_masks_grp = f_result.create_group("stage1_fold{}_predict_masks".format(fold_k))
-    #     except:
-    #         stage1_predict_masks_grp = f_h5["stage1_fold{}_predict_masks".format(fold_k)]
-    #     keys = images_grp.keys()
-    #     images = []
-    #     for key in keys:
-    #         image = images_grp[key].value
-    #         if len(image.shape) == 3:
-    #             image = image[:, :, 0]
-    #         images.append(image)
-    #     images = np.array(images)
-    #     images = np.expand_dims(images, axis=-1)
-    #     print("Predicting ...")
-    #     images = preprocess(images, mode="image")
-    #     masks = self.predict(images, batch_size)
-    #     print(masks.shape)
-    #     masks = np.squeeze(masks, axis=-1)
-    #     print("Saving predicted masks ...")
-    #     for i, key in enumerate(keys):
-    #         stage1_predict_masks_grp.create_dataset(key, dtype=np.float32, data=masks[i])
-    #     print("Done.")
-    #
-    # def predict_and_show(self, images, output_channels=1):
-    #     if isinstance(images, str):
-    #         images_src = self.read_images([images])
-    #     else:
-    #         images_src = images
-    #     images = preprocess(images_src, mode="image")
-    #     predict_mask = self.predict(images, 1)
-    #     result = np.squeeze(predict_mask, axis=0)
-    #     if output_channels == 2:
-    #         result0 = result[..., 0]
-    #         result0 = preprocess(result0, mode="mask")
-    #         result0 = np.where(result0 > 0, 255, 0)
-    #         result1 = result[..., 1]
-    #         result1 = preprocess(result1, mode="mask")
-    #         result1 = np.where(result1 > 0, 255, 0)
-    #         result = np.concatenate((np.squeeze(images_src, axis=[0, -1]), result0, result1), axis=1)
-    #         plt.imshow(result, cmap="gray")
-    #     else:
-    #         result = np.squeeze(result, axis=-1)
-    #         result = preprocess(result, mode="mask")
-    #         result = np.where(result > 0, 255, 0)
-    #         result = np.concatenate((np.squeeze(images_src, axis=[0, -1]), result), axis=1)
-    #         plt.imshow(result, cmap="gray")
-    #
-    #     plt.show()
+    @staticmethod
+    def postprocess(masks):
+        return DataSet.preprocess(masks, mode="mask")
+
+    def predict_and_save_stage1_masks(self, h5_data_path, h5_result_saved_path, fold_k=0, batch_size=32):
+        """
+        从h5data中读取images进行预测，并把预测mask保存进h5data中。
+        Args:
+            h5_data_path: str, 存放有训练数据的h5文件路径。
+            batch_size: int, 批大小。
+
+        Returns: None.
+
+        """
+
+        f_result = h5py.File(h5_result_saved_path, "a")
+        try:
+            stage1_predict_masks_grp = f_result.create_group("stage1_fold{}_predict_masks".format(fold_k))
+        except:
+            stage1_predict_masks_grp = f_result["stage1_fold{}_predict_masks".format(fold_k)]
+
+        dataset = DataSet(h5_data_path, fold_k)
+
+        images, masks = dataset.prepare_1i_1o_data(is_train=is_train, mask_nb=0)
+        print("predicting ...")
+        y_preds = self.model.predict(images, batch_size=4)
+        print(y_preds.shape)
+
+        keys = images_grp.keys()
+        images = []
+        for key in keys:
+            image = images_grp[key].value
+            if len(image.shape) == 3:
+                image = image[:, :, 0]
+            images.append(image)
+        images = np.array(images)
+        images = np.expand_dims(images, axis=-1)
+        print("Predicting ...")
+        images = preprocess(images, mode="image")
+        masks = self.predict(images, batch_size)
+        print(masks.shape)
+        masks = np.squeeze(masks, axis=-1)
+        print("Saving predicted masks ...")
+        for i, key in enumerate(keys):
+            stage1_predict_masks_grp.create_dataset(key, dtype=np.float32, data=masks[i])
+        print("Done.")
+
+    def predict_and_show(self, image, show_output_channels):
+        """
+        
+        Args:
+            image: str(image path) or numpy array(h, w, c)
+            show_output_channels: 
+
+        Returns:
+
+        """
+        if isinstance(image, str):
+            images_src = self.read_images([image])
+        else:
+            images_src = image
+        image = DataSet.preprocess(images_src, mode="image")
+        predict_mask = self.predict(image, 1, use_channels=show_output_channels)
+        predict_mask = np.squeeze(predict_mask, axis=0)
+        predict_mask = self.postprocess(predict_mask)
+        predict_mask = DataSet.de_preprocess(predict_mask, mode="mask")
+        if show_output_channels == 2:
+            mask0 = predict_mask[..., 0]
+            mask1 = predict_mask[..., 1]
+            result = np.concatenate((np.squeeze(images_src, axis=[0, -1]), mask0, mask1), axis=1)
+        else:
+            result = np.concatenate((np.squeeze(images_src, axis=[0, -1]), predict_mask), axis=1)
+        plt.imshow(result, cmap="gray")
+
+        plt.show()
 
     def read_images(self, image_path_lst):
         print("Loading images ...")
@@ -109,9 +123,49 @@ class ModelDeployment(object):
             imgs.append(img)
         return np.array(imgs)
 
-    def predict(self, images, batch_size):
+    def predict(self, images, batch_size, use_channels=1):
         outputs = self.model.predict(images, batch_size)
+        if use_channels == 1:
+            outputs = outputs[..., 0]
         return outputs
+
+    def predict_from_h5data(self, h5_data_path, val_fold_nb, is_train=False, save_dir=None,
+                            color_lst=None):
+        dataset = DataSet(h5_data_path, val_fold_nb)
+
+        images = dataset.get_images(is_train=is_train)
+        masks = dataset.get_masks(is_train=is_train, mask_nb=0)
+        masks = np.squeeze(masks, axis=-1)
+        print("predicting ...")
+        y_preds = self.model.predict(dataset.preprocess(images, mode="image"), batch_size=4)
+        y_preds = self.postprocess(y_preds)
+        y_preds = DataSet.de_preprocess(y_preds, mode="mask")
+        print(y_preds.shape)
+
+        if save_dir:
+            keys = dataset._get_keys(is_train)
+            images = np.concatenate([images for i in range(3)], axis=-1)
+            print(images.shape)
+            y_preds = y_preds[..., 0]
+            if color_lst is None:
+                color_gt = [0, 191, 255]
+                color_pred = [255, 255, 0]
+                # color_pred = [255, 106, 106]
+            else:
+                color_gt = color_lst[0]
+                color_pred = color_lst[1]
+
+            image_masks = [apply_mask(image, mask, color_gt, alpha=0.5) for image, mask in zip(images, masks)]
+            image_preds = [apply_mask(image, mask, color_pred, alpha=0.5) for image, mask in zip(images, y_preds)]
+            dst_image_path_lst = [os.path.join(save_dir, "{:03}.tif".format(int(key))) for key in keys]
+            if not os.path.isdir(save_dir):
+                os.makedirs(save_dir)
+            image_mask_preds = np.concatenate([images, image_masks, image_preds], axis=2)
+            for i in range(len(image_masks)):
+                cv2.imwrite(dst_image_path_lst[i], image_mask_preds[i])
+            print("Done.")
+        else:
+            return y_preds
 
     # def predict_and_save_image_masks(self, image_path_lst, save_dir, batch_size=32, color=None, alpha=0.5):
     #     images = self.read_images(image_path_lst)
@@ -131,36 +185,18 @@ class ModelDeployment(object):
     #     for i in range(len(image_masks)):
     #         scipy.misc.toimage(image_masks[i], cmin=0.0, cmax=...).save(dst_image_path_lst[i])
 
-    # no test
-    @staticmethod
-    def show_image(**kw):
-        assert "image" in kw.keys()
-        mask = None
-        image = kw["image"]
-        assert len(image.shape) == 3, "Image should be 3-d array."
-        if "mask" in kw.keys():
-            mask = kw["mask"]
-            assert len(mask.shape) == 2, "Mask should be 2-d array."
-        if mask is not None:
-            print("fff")
-            color = [0, 191, 255]
-            image = apply_mask(image, mask, color, alpha=0.5)
-        plt.figure()
-        plt.imshow(image)
-        plt.show()
-
 
 def do_get_acc():
+    h5_data_path = "/home/topsky/helloworld/study/njai_challenge/cbct/inputs/data_0717.hdf5"
     val_fold_nb = 1
     output_channels = 2
     is_train = False
     model_def = get_inception_resnet_v2_unet_sigmoid(weights=None, output_channels=output_channels)
     model_weights = "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/final_inception_resnet_v2_bn_fold1_1i_2o.h5"
-    h5_data_path = "/home/topsky/helloworld/study/njai_challenge/cbct/inputs/data_0717.hdf5"
-    get_acc(model_def, model_weights, h5_data_path, val_fold_nb, output_channels, is_train)
+    get_acc(model_def, model_weights, h5_data_path, val_fold_nb, is_train)
 
 
-def get_acc(model_def, model_weights, h5_data_path, val_fold_nb, output_channels=1, is_train=False):
+def get_acc(model_def, model_weights, h5_data_path, val_fold_nb, is_train=False):
     dataset = DataSet(h5_data_path, val_fold_nb)
     images, masks = dataset.prepare_1i_1o_data(is_train=is_train, mask_nb=0)
 
@@ -168,7 +204,7 @@ def get_acc(model_def, model_weights, h5_data_path, val_fold_nb, output_channels
     y_pred = model_obj.predict(images, batch_size=4)
 
     K.clear_session()
-    if output_channels == 2:
+    if y_pred.shape[-1] == 2:
         y_pred = y_pred[..., 0]
     print(y_pred.shape)
 
@@ -237,23 +273,28 @@ def get_acc(model_def, model_weights, h5_data_path, val_fold_nb, output_channels
 
 
 def infer_do():
-    model_weights = "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/final_inception_resnet_v2_bn_fold1_1i_2i.h5"
     h5_data_path = "/home/topsky/helloworld/study/njai_challenge/cbct/inputs/data_0717.hdf5"
-    model_def = get_inception_resnet_v2_unet_sigmoid(weights=None, output_channels=2)
+    result_save_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/image_mask_preds_20180725"
+    model_weights = "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/final_inception_resnet_v2_gn_fold1_1i_2o.h5"
+    model_def = get_inception_resnet_v2_unet_sigmoid_gn(weights=None, output_channels=2)
     model_obj = ModelDeployment(model_def, model_weights)
+    # model_obj.predict_from_h5data(h5_data_path, val_fold_nb=1, is_train=False, save_dir=result_save_dir)
 
     dataset = DataSet(h5_data_path, val_fold_nb=1)
     keys = dataset.val_keys
     images = dataset.get_image_by_key(keys[8])
-
-    # model_obj.predict_and_show(images, output_channels=2)
+    images = np.expand_dims(images, axis=0)
+    images = np.expand_dims(images, axis=-1)
+    model_obj.predict_and_show(images, show_output_channels=2)
 
 
 def __main():
+    # Set test mode
+    K.set_learning_phase(0)
     np.set_printoptions(threshold=np.inf)
     # do_infer_2stages()
-    do_get_acc()
-    # infer_do()
+    # do_get_acc()
+    infer_do()
 
 
 if __name__ == '__main__':

@@ -65,6 +65,11 @@ def conv2d_gn(x,
     if not use_bias:
         gn_axis = 1 if backend.image_data_format() == 'channels_first' else 3
         gn_name = None if name is None else name + '_gn'
+        # try:
+        #     x = GroupNormalization(axis=gn_axis, groups=32,
+        #                            scale=False,
+        #                            name=gn_name)(x)
+        # except:
         x = GroupNormalization(axis=gn_axis, groups=filters // 4,
                                scale=False,
                                name=gn_name)(x)
