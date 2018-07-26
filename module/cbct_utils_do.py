@@ -56,11 +56,11 @@ def save_mask_image():
     Returns:
 
     """
-    data_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct"
+    data_dir = "/media/zj/share/data/njai_2018/cbct"
     images_dir = os.path.join(data_dir, "train")
     masks_dir = os.path.join(data_dir, "label")
     # 新合并图的保存路径。
-    mask_image_dir = os.path.join(data_dir, "image_mask_20180714")
+    mask_image_dir = os.path.join(data_dir, "result", "image_mask_20180726")
     if not os.path.isdir(mask_image_dir):
         os.makedirs(mask_image_dir)
     basename_lst = next(os.walk(images_dir))[2]
@@ -77,7 +77,7 @@ def save_mask_image():
         if len(mask.shape) == 3:
             assert mask[:, :, 0].all() == mask[:, :, 1].all() and mask[:, :, 0].all() == mask[:, :, 2].all()
             mask = mask[:, :, 0]
-        mask = np.where(mask > 0.5, 1, 0)
+        mask = np.where(mask > 0.5, 255, 0)
 
         # mask = mask // 255
         mask_image = apply_mask(image, mask, color, alpha=alpha)
@@ -93,8 +93,8 @@ def make_hdf5_database():
     Returns:
 
     """
-    data_root = "/media/topsky/HHH/jzhang_root/data/njai/cbct"
-    hdf5_path = "/home/topsky/helloworld/study/njai_challenge/cbct/inputs/data_0717.hdf5"
+    data_root = "/media/zj/share/data/njai_2018/cbct"
+    hdf5_path = "/home/zj/helloworld/study/njai_challenge/cbct/inputs/data_0717.hdf5"
     f = h5py.File(hdf5_path, "w")
     grp_x = f.create_group("images")
     grp_y_0 = f.create_group("mask_0")
@@ -118,11 +118,12 @@ def make_hdf5_database():
         mask_1 = cv2.imread(mask_1_file_path_lst[i], cv2.IMREAD_GRAYSCALE)
         grp_y_1.create_dataset(idx, dtype=np.uint8, data=mask_1)
 
+
 def add_k_fold_map_hdf5():
-    hdf5_path = "/home/topsky/helloworld/study/njai_challenge/cbct/inputs/data_0717.hdf5"
+    hdf5_path = "/home/zj/helloworld/study/njai_challenge/cbct/inputs/data_0717.hdf5"
     f_h5 = h5py.File(hdf5_path, mode="r+")
     # del f_h5["k_fold_map"]
-    k_fold_path = "/home/topsky/helloworld/study/njai_challenge/module/k_fold.csv"
+    k_fold_path = "/home/zj/helloworld/study/njai_challenge/module/k_fold.csv"
     with open(k_fold_path, 'r') as f:
         lines = f.readlines()
     k_fold_map = {}
@@ -137,8 +138,6 @@ def add_k_fold_map_hdf5():
             k_fold_map[idx].extend(value_lst)
     json_obj = json.dumps(k_fold_map)
     f_h5.create_dataset("k_fold_map", data=json_obj)
-
-
 
 
 # not use any more
@@ -228,16 +227,16 @@ def map_file2index():
 
 def __main():
     np.set_printoptions(threshold=np.inf)
-    make_hdf5_database()
+    # make_hdf5_database()
     # add_train_val_id_hdf5()
-    # save_mask_image()
+    save_mask_image()
     # show_image()
     # save_labelme2_mask()
     # read_data_test()
     # combine_image_mask_predict()
     # read_data_and_show()
     # map_file2index()
-    add_k_fold_map_hdf5()
+    # add_k_fold_map_hdf5()
     pass
 
 

@@ -37,11 +37,11 @@ def apply_mask(image, mask, color, alpha=0.5):
     Returns: 3-d numpy array.
 
     """
-    mask_image = image.copy()
+    mask_image = np.zeros_like(image)
     for c in range(3):
         mask_image[:, :, c] = np.where(mask == 255,
-                                       mask_image[:, :, c] * (1 - alpha) + alpha * color[c],
-                                       mask_image[:, :, c])
+                                       image[..., c] * (1 - alpha) + alpha * color[c],
+                                       image[..., c])
     return mask_image
 
 

@@ -89,8 +89,8 @@ class ModelDeployment(object):
         """
         
         Args:
-            image: str(image path) or numpy array(h, w, c)
-            show_output_channels: 
+            img: str(image path) or numpy array(b=1, h=576, w=576, c=1)
+            show_output_channels: 1 or 2
 
         Returns:
 
@@ -99,18 +99,21 @@ class ModelDeployment(object):
             images_src = self.read_images([image])
         else:
             images_src = image
-        image = DataSet.preprocess(images_src, mode="image")
-        predict_mask = self.predict(image, 1, use_channels=show_output_channels)
+        img = DataSet.preprocess(images_src, mode="image")
+        predict_mask = self.predict(img, 1, use_channels=show_output_channels)
         predict_mask = np.squeeze(predict_mask, axis=0)
         predict_mask = self.postprocess(predict_mask)
         predict_mask = DataSet.de_preprocess(predict_mask, mode="mask")
         if show_output_channels == 2:
             mask0 = predict_mask[..., 0]
             mask1 = predict_mask[..., 1]
-            result = np.concatenate((np.squeeze(images_src, axis=[0, -1]), mask0, mask1), axis=1)
+            image_c3 = np.concatenate([np.squeeze(images_src, axis=0) for i in range(3)], axis=-1)
+            image_mask0 = apply_mask(image_c3, mask0, color=[255, 106, 106], alpha=0.5)
+            # result = np.concatenate((np.squeeze(images_src, axis=[0, -1]), mask0, mask1, image_mask0), axis=1)
+            plt.imshow(image_mask0)
         else:
             result = np.concatenate((np.squeeze(images_src, axis=[0, -1]), predict_mask), axis=1)
-        plt.imshow(result, cmap="gray")
+            plt.imshow(result, cmap="gray")
 
         plt.show()
 
@@ -134,33 +137,32 @@ class ModelDeployment(object):
         dataset = DataSet(h5_data_path, val_fold_nb)
 
         images = dataset.get_images(is_train=is_train)
+        imgs_src = np.concatenate([images for i in range(3)], axis=-1)
         masks = dataset.get_masks(is_train=is_train, mask_nb=0)
         masks = np.squeeze(masks, axis=-1)
         print("predicting ...")
         y_preds = self.model.predict(dataset.preprocess(images, mode="image"), batch_size=4)
         y_preds = self.postprocess(y_preds)
         y_preds = DataSet.de_preprocess(y_preds, mode="mask")
+        y_preds = y_preds[..., 0]
         print(y_preds.shape)
 
         if save_dir:
             keys = dataset._get_keys(is_train)
-            images = np.concatenate([images for i in range(3)], axis=-1)
-            print(images.shape)
-            y_preds = y_preds[..., 0]
             if color_lst is None:
-                color_gt = [0, 191, 255]
-                color_pred = [255, 255, 0]
-                # color_pred = [255, 106, 106]
+                color_gt = [255, 106, 106]
+                color_pred = [0, 191, 255]
+                # color_pred = [255, 255, 0]
             else:
                 color_gt = color_lst[0]
                 color_pred = color_lst[1]
 
-            image_masks = [apply_mask(image, mask, color_gt, alpha=0.5) for image, mask in zip(images, masks)]
-            image_preds = [apply_mask(image, mask, color_pred, alpha=0.5) for image, mask in zip(images, y_preds)]
+            image_masks = [apply_mask(image, mask, color_gt, alpha=0.5) for image, mask in zip(imgs_src, masks)]
+            image_preds = [apply_mask(image, mask, color_pred, alpha=0.5) for image, mask in zip(imgs_src, y_preds)]
             dst_image_path_lst = [os.path.join(save_dir, "{:03}.tif".format(int(key))) for key in keys]
             if not os.path.isdir(save_dir):
                 os.makedirs(save_dir)
-            image_mask_preds = np.concatenate([images, image_masks, image_preds], axis=2)
+            image_mask_preds = np.concatenate([imgs_src, image_masks, image_preds], axis=2)
             for i in range(len(image_masks)):
                 cv2.imwrite(dst_image_path_lst[i], image_mask_preds[i])
             print("Done.")
@@ -169,9 +171,9 @@ class ModelDeployment(object):
 
     # def predict_and_save_image_masks(self, image_path_lst, save_dir, batch_size=32, color=None, alpha=0.5):
     #     images = self.read_images(image_path_lst)
-    #     images = preprocess(images, mode="image")
+    #     images = DataSet.preprocess(images, mode="image")
     #     masks = self.predict(images, batch_size)
-    #     masks = np.where(masks > 0.5, 1, 0)
+    #     masks = np.where(masks > 0.5, 255, 0)
     #
     #     images = [np.concatenate([image for i in range(3)], axis=-1) for image in images]
     #     masks = [mask[..., 0] for mask in masks]
@@ -273,12 +275,14 @@ def get_acc(model_def, model_weights, h5_data_path, val_fold_nb, is_train=False)
 
 
 def infer_do():
-    h5_data_path = "/home/topsky/helloworld/study/njai_challenge/cbct/inputs/data_0717.hdf5"
-    result_save_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/image_mask_preds_20180725"
-    model_weights = "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/final_inception_resnet_v2_gn_fold1_1i_2o.h5"
+    h5_data_path = "/home/zj/helloworld/study/njai_challenge/cbct/inputs/data_0717.hdf5"
+    result_save_dir = "/media/zj/share/data/njai_2018/cbct/result/image_mask_preds20180726"
+    model_weights = "/home/zj/helloworld/study/njai_challenge/cbct/model_weights/final_inception_resnet_v2_gn_fold1_1i_2o.h5"
     model_def = get_inception_resnet_v2_unet_sigmoid_gn(weights=None, output_channels=2)
     model_obj = ModelDeployment(model_def, model_weights)
     # model_obj.predict_from_h5data(h5_data_path, val_fold_nb=1, is_train=False, save_dir=result_save_dir)
+    # model_obj.predict_from_h5data(h5_data_path, val_fold_nb=1, is_train=True, save_dir=result_save_dir)
+
 
     dataset = DataSet(h5_data_path, val_fold_nb=1)
     keys = dataset.val_keys
