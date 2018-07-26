@@ -15,8 +15,10 @@ import h5py
 import numpy as np
 import scipy.misc
 from PIL import Image
+from func.model_inception_resnet_v2_gn import get_inception_resnet_v2_unet_sigmoid_gn
 from tqdm import tqdm
 
+from module.inference import ModelDeployment
 from module.utils_public import apply_mask, get_file_path_list, random_colors
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -186,18 +188,6 @@ def combine_image_mask_predict():
             os.path.join(image_mask_pred_save_dir, file_lst[i]))
 
 
-def read_data_test():
-    data_path = "/home/topsky/helloworld/study/njai_challenge/cbct/inputs/data.hdf5"
-    val_id_save_path = "/media/topsky/HHH/jzhang_root/data/njai/cbct/pred_mask_images_20180711/val_id.csv"
-    f = h5py.File(data_path, mode="r")
-    v = f["val_id"].value
-    v = [x.tostring().decode() for x in v]
-    v = sorted(v)
-    val_series = pd.Series(data=v, name="val_id")
-    val_series.to_csv(val_id_save_path, index=False)
-    print(val_series)
-
-
 def read_data_and_show():
     data_path = "/home/topsky/helloworld/study/njai_challenge/cbct/inputs/data.hdf5"
     val_id_save_path = "/media/topsky/HHH/jzhang_root/data/njai/cbct/pred_mask_images_20180711/val_id.csv"
@@ -225,11 +215,21 @@ def map_file2index():
     pprint(idx2file)
 
 
+def predict_and_save_stage1_result():
+    h5_data_path = "/home/topsky/helloworld/study/njai_challenge/cbct/inputs/data_0717.hdf5"
+    stage1_h5_data = "/home/topsky/helloworld/study/njai_challenge/cbct/inputs/predicted_masks_data.hdf5"
+    model_weights = "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/final_inception_resnet_v2_gn_fold1_1i_1o_stage1.h5"
+    model_def = get_inception_resnet_v2_unet_sigmoid_gn(weights=None, output_channels=1)
+    model_obj = ModelDeployment(model_def, model_weights)
+    model_obj.predict_and_save_stage1_masks(h5_data_path, stage1_h5_data, fold_k=1, batch_size=4)
+    # model_obj.predict_from_h5data(h5_data_path, val_fold_nb=1, is_train=False, save_dir=result_save_dir)
+    # model_obj.predict_from_h5data(h5_data_path, val_fold_nb=1, is_train=True, save_dir=result_save_dir)
+
 def __main():
     np.set_printoptions(threshold=np.inf)
     # make_hdf5_database()
     # add_train_val_id_hdf5()
-    save_mask_image()
+    # save_mask_image()
     # show_image()
     # save_labelme2_mask()
     # read_data_test()
@@ -237,6 +237,7 @@ def __main():
     # read_data_and_show()
     # map_file2index()
     # add_k_fold_map_hdf5()
+    predict_and_save_stage1_result()
     pass
 
 

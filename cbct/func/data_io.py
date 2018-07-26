@@ -26,6 +26,7 @@ class DataSet(object):
         self.f_h5 = f_h5
         self.train_keys = train_keys
         self.val_keys = val_keys
+        self.val_fold_nb = val_fold_nb
 
     def prepare_stage1_data(self, is_train):
         images = self.get_images(is_train)
@@ -73,7 +74,7 @@ class DataSet(object):
         return image
 
     def get_images(self, is_train):
-        keys = self._get_keys(is_train)
+        keys = self.get_keys(is_train)
         images = []
         for key in keys:
             image = self.f_h5["images"][key].value
@@ -87,7 +88,7 @@ class DataSet(object):
 
     def get_masks(self, is_train, mask_nb):
         assert mask_nb in [0, 1]
-        keys = self._get_keys(is_train)
+        keys = self.get_keys(is_train)
         masks = []
         mask_str = "mask_{}".format(mask_nb)
         for key in keys:
@@ -98,16 +99,17 @@ class DataSet(object):
         return masks
 
     def get_stage1_predict_masks(self, is_train):
-        keys = self._get_keys(is_train)
+        f_h5 = h5py.File("/home/jzhang/helloworld/mtcnn/cb/inputs/predicted_masks_data.hdf5", "r")
+        keys = self.get_keys(is_train)
         masks = []
         for key in keys:
-            mask = self.f_h5["stage1_predict_masks"][key].value
+            mask = f_h5["stage1_fold{}_predict_masks".format(self.val_fold_nb)][key].value
             masks.append(mask)
         masks = np.array(masks)
         masks = np.expand_dims(masks, axis=-1)
         return masks
 
-    def _get_keys(self, is_train):
+    def get_keys(self, is_train):
         if is_train:
             keys = self.train_keys
         else:

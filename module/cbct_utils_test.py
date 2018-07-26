@@ -8,7 +8,7 @@ import json
 import os
 from datetime import datetime
 from pprint import pprint
-
+import pandas as pd
 import cv2
 import numpy as np
 from PIL import Image
@@ -114,6 +114,16 @@ def read_h5_test():
         print(mask.shape)
         exit()
 
+def read_data_test():
+    data_path = "/home/topsky/helloworld/study/njai_challenge/cbct/inputs/data.hdf5"
+    val_id_save_path = "/media/topsky/HHH/jzhang_root/data/njai/cbct/pred_mask_images_20180711/val_id.csv"
+    f = h5py.File(data_path, mode="r")
+    v = f["val_id"].value
+    v = [x.tostring().decode() for x in v]
+    v = sorted(v)
+    val_series = pd.Series(data=v, name="val_id")
+    val_series.to_csv(val_id_save_path, index=False)
+    print(val_series)
 
 def read_image_test():
     img_path = "/media/zj/share/data/njai_2018/cbct/train/001.tif"

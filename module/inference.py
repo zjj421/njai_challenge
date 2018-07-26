@@ -61,28 +61,19 @@ class ModelDeployment(object):
 
         dataset = DataSet(h5_data_path, fold_k)
 
-        images, masks = dataset.prepare_1i_1o_data(is_train=is_train, mask_nb=0)
+        images_train = dataset.get_images(is_train=True)
+        images_val = dataset.get_images(is_train=False)
+        keys_train = dataset.get_keys(is_train=True)
+        keys_val = dataset.get_keys(is_train=False)
+        images = np.concatenate([images_train, images_val], axis=0)
+        keys = np.concatenate([keys_train, keys_val], axis=0)
         print("predicting ...")
-        y_preds = self.model.predict(images, batch_size=4)
-        print(y_preds.shape)
-
-        keys = images_grp.keys()
-        images = []
-        for key in keys:
-            image = images_grp[key].value
-            if len(image.shape) == 3:
-                image = image[:, :, 0]
-            images.append(image)
-        images = np.array(images)
-        images = np.expand_dims(images, axis=-1)
-        print("Predicting ...")
-        images = preprocess(images, mode="image")
-        masks = self.predict(images, batch_size)
-        print(masks.shape)
-        masks = np.squeeze(masks, axis=-1)
+        images = dataset.preprocess(images, mode="image")
+        y_pred = self.predict(images, batch_size, use_channels=1)
+        print(y_pred.shape)
         print("Saving predicted masks ...")
         for i, key in enumerate(keys):
-            stage1_predict_masks_grp.create_dataset(key, dtype=np.float32, data=masks[i])
+            stage1_predict_masks_grp.create_dataset(key, dtype=np.float32, data=y_pred[i])
         print("Done.")
 
     def predict_and_show(self, image, show_output_channels):
@@ -148,7 +139,7 @@ class ModelDeployment(object):
         print(y_preds.shape)
 
         if save_dir:
-            keys = dataset._get_keys(is_train)
+            keys = dataset.get_keys(is_train)
             if color_lst is None:
                 color_gt = [255, 106, 106]
                 color_pred = [0, 191, 255]

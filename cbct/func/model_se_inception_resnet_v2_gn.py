@@ -14,6 +14,7 @@ from tqdm import tqdm
 
 from func.config import Config
 from func.group_norm import GroupNormalization
+from func.se import squeeze_excite_block
 
 layers = get_keras_submodule('layers')
 backend = get_keras_submodule('backend')
@@ -37,7 +38,7 @@ def conv_block(prev, num_filters, kernel=(3, 3), strides=(1, 1), act='relu', pre
 
 
 def inception_resnet_block(x, scale, block_type, block_idx, activation='relu'):
-    """Adds a Inception-ResNet block.
+    """Adds a Inception-ResNet block with Squeeze and Excitation block at the end.
 
     This function builds 3 types of Inception-ResNet blocks mentioned
     in the paper, controlled by the `block_type` argument (which is the
@@ -118,6 +119,10 @@ def inception_resnet_block(x, scale, block_type, block_idx, activation='relu'):
                       name=block_name)([x, up])
     if activation is not None:
         x = layers.Activation(activation, name=block_name + '_ac')(x)
+
+    # squeeze and excite block
+    x = squeeze_excite_block(x)
+
     return x
 
 
@@ -168,9 +173,9 @@ def conv2d_gn(x,
     return x
 
 
-def get_inception_resnet_v2_unet_sigmoid_gn(input_shape=(CONFIG.img_h, CONFIG.img_w, CONFIG.img_c),
-                                            output_channels=1,
-                                            weights='imagenet'):
+def get_se_inception_resnet_v2_unet_sigmoid_gn(input_shape=(CONFIG.img_h, CONFIG.img_w, CONFIG.img_c),
+                                               output_channels=1,
+                                               weights='imagenet'):
     inp = Input(input_shape)
 
     # Stem block: 35 x 35 x 192
@@ -197,6 +202,9 @@ def get_inception_resnet_v2_unet_sigmoid_gn(input_shape=(CONFIG.img_h, CONFIG.im
     channel_axis = 1 if K.image_data_format() == 'channels_first' else 3
     x = Concatenate(axis=channel_axis, name='mixed_5b')(branches)
 
+    # squeeze and excite block
+    x = squeeze_excite_block(x)
+
     # 10x block35 (Inception-ResNet-A block): 35 x 35 x 320
     for block_idx in range(1, 11):
         x = inception_resnet_block(x,
@@ -212,6 +220,10 @@ def get_inception_resnet_v2_unet_sigmoid_gn(input_shape=(CONFIG.img_h, CONFIG.im
     branch_pool = MaxPooling2D(3, strides=2, padding='same')(x)
     branches = [branch_0, branch_1, branch_pool]
     x = Concatenate(axis=channel_axis, name='mixed_6a')(branches)
+
+
+    # squeeze and excite block
+    x = squeeze_excite_block(x)
 
     # 20x block17 (Inception-ResNet-B block): 17 x 17 x 1088
     for block_idx in range(1, 21):
@@ -232,6 +244,9 @@ def get_inception_resnet_v2_unet_sigmoid_gn(input_shape=(CONFIG.img_h, CONFIG.im
     branches = [branch_0, branch_1, branch_2, branch_pool]
     x = Concatenate(axis=channel_axis, name='mixed_7a')(branches)
 
+    # squeeze and excite block
+    x = squeeze_excite_block(x)
+
     # 10x block8 (Inception-ResNet-C block): 8 x 8 x 2080
     for block_idx in range(1, 10):
         x = inception_resnet_block(x,
@@ -243,6 +258,9 @@ def get_inception_resnet_v2_unet_sigmoid_gn(input_shape=(CONFIG.img_h, CONFIG.im
                                activation=None,
                                block_type='block8',
                                block_idx=10)
+
+    # squeeze and excite block
+    x = squeeze_excite_block(x)
 
     # Final convolution block: 8 x 8 x 1536
     x = conv2d_gn(x, 1536, 1, name='conv_7b')

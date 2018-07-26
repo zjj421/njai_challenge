@@ -21,6 +21,7 @@ from func.model_inception_resnet_v2 import get_inception_resnet_v2_unet_sigmoid,
     dice_coef_rounded_ch0, dice_coef_rounded_ch1, sigmoid_dice_loss, binary_acc_ch0, dice_coef, \
     sigmoid_dice_loss_1channel_output
 from func.model_inception_resnet_v2_gn import get_inception_resnet_v2_unet_sigmoid_gn
+from func.model_se_inception_resnet_v2_gn import get_se_inception_resnet_v2_unet_sigmoid_gn
 from func.utils import mean_iou_ch0
 
 CONFIG = Config()
@@ -82,9 +83,11 @@ def train_generator(model_def, model_saved_path, h5_data_path, batch_size, epoch
 
     # prepare train and val data.
     dataset = DataSet(h5_data_path, val_fold_nb=fold_k)
+    # x_train, y_train = dataset.prepare_stage2_data(is_train=True)
     x_train, y_train = dataset.prepare_1i_2o_data(is_train=True)
     print(x_train.shape)
     print(y_train.shape)
+    # x_val, y_val = dataset.prepare_stage2_data(is_train=False)
     x_val, y_val = dataset.prepare_1i_2o_data(is_train=False)
     print(x_val.shape)
     print(y_val.shape)
@@ -102,12 +105,11 @@ def train_generator(model_def, model_saved_path, h5_data_path, batch_size, epoch
     train_data_gen_args = dict(featurewise_center=False,
                                featurewise_std_normalization=False,
                                rotation_range=20,
-                               width_shift_range=0.05,
-                               height_shift_range=0.05,
+                               width_shift_range=0.,
+                               height_shift_range=0.1,
                                horizontal_flip=True,
-                               # vertical_flip=True,
-                               # brightness_range=0.2,
-                               shear_range=0.05,
+                               fill_mode="nearest",
+                               shear_range=0.,
                                zoom_range=0.05, )
     train_image_datagen = ImageDataGenerator(**train_data_gen_args)
     train_mask_datagen = ImageDataGenerator(**train_data_gen_args)
@@ -133,15 +135,24 @@ def train_generator(model_def, model_saved_path, h5_data_path, batch_size, epoch
     val_mask_generator = val_mask_datagen.flow(y_val, None, batch_size, shuffle=False, seed=seed)
     val_data_generator = zip(val_image_generator, val_mask_generator)
 
+    model_save_root, model_save_basename = os.path.split(model_saved_path)
+    model_saved_path0 = os.path.join(model_save_root, "best_val_loss", model_save_basename)
+    model_saved_path1 = os.path.join(model_save_root, "best_val_acc", model_save_basename)
+
     if gpus > 1:
         parallel_model = multi_gpu_model(model, gpus=gpus)
-        model_checkpoint = ModelCheckpointMGPU(model, model_saved_path, save_best_only=True, save_weights_only=True,
-                                               monitor="val_loss",
-                                               mode='min')
+        model_checkpoint0 = ModelCheckpointMGPU(model, model_saved_path0, save_best_only=True, save_weights_only=True,
+                                                monitor="val_loss",
+                                                mode='min')
+        model_checkpoint1 = ModelCheckpointMGPU(model, model_saved_path1, save_best_only=True, save_weights_only=True,
+                                                monitor="val_binary_acc_ch0",
+                                                mode='max')
     else:
         parallel_model = model
-        model_checkpoint = ModelCheckpoint(model_saved_path, save_best_only=True, save_weights_only=True,
-                                           monitor='val_loss', mode='min')
+        model_checkpoint0 = ModelCheckpoint(model_saved_path0, save_best_only=True, save_weights_only=True,
+                                            monitor='val_loss', mode='min')
+        model_checkpoint1 = ModelCheckpoint(model_saved_path1, save_best_only=True, save_weights_only=True,
+                                            monitor='val_binary_acc_ch0', mode='max')
     parallel_model.compile(loss=fit_loss,
                            optimizer=opt,
                            metrics=fit_metrics)
@@ -155,55 +166,44 @@ def train_generator(model_def, model_saved_path, h5_data_path, batch_size, epoch
         steps_per_epoch=count_train // batch_size,
         validation_steps=count_val // batch_size,
         epochs=epochs,
-        callbacks=[model_checkpoint, csv_logger, learning_rate_scheduler],
+        callbacks=[model_checkpoint0, model_checkpoint1, csv_logger, learning_rate_scheduler],
         verbose=verbose,
         workers=2,
         use_multiprocessing=True,
         shuffle=True
     )
-    model_save_root, model_save_basename = os.path.split(model_saved_path)
+    # model_save_root, model_save_basename = os.path.split(model_saved_path)
     final_model_save_path = os.path.join(model_save_root, "final_" + model_save_basename)
     parallel_model.save_weights(final_model_save_path)
 
 
 def __main():
     h5_data_path = "/home/jzhang/helloworld/mtcnn/cb/inputs/data_0717.hdf5"
-
     model_weights = "/home/jzhang/helloworld/mtcnn/cb/model_weights/inception_resnet_v2_input1_output2_pretrained_weights.h5"
-    model_saved_path = "/home/jzhang/helloworld/mtcnn/cb/model_weights/inception_resnet_v2_gn_fold0_1i_2o_20180725.h5"
-    model_def = get_inception_resnet_v2_unet_sigmoid_gn(input_shape=(576, 576, 1), weights=None,
-                                                        output_channels=2)
-    train_generator(model_def, model_saved_path, h5_data_path, batch_size=3, epochs=300,
+
+    model_saved_path = "/home/jzhang/helloworld/mtcnn/cb/model_weights/se_inception_resnet_v2_gn_fold0_1i_2o_20180726.h5"
+    model_def = get_se_inception_resnet_v2_unet_sigmoid_gn(input_shape=(576, 576, 1), weights=None,
+                                                           output_channels=2)
+    train_generator(model_def, model_saved_path, h5_data_path, batch_size=3, epochs=150,
                     model_weights=model_weights,
-                    gpus=1, verbose=2, csv_log_suffix="0725_0", fold_k=0)
+                    gpus=1, verbose=2, csv_log_suffix="0", fold_k=0)
     K.clear_session()
 
-    model_saved_path = "/home/jzhang/helloworld/mtcnn/cb/model_weights/inception_resnet_v2_gn_fold2_1i_2o_20180725.h5"
-    model_def = get_inception_resnet_v2_unet_sigmoid_gn(input_shape=(576, 576, 1), weights=None,
-                                                        output_channels=2)
-    train_generator(model_def, model_saved_path, h5_data_path, batch_size=3, epochs=300,
+    model_saved_path = "/home/jzhang/helloworld/mtcnn/cb/model_weights/se_inception_resnet_v2_gn_fold1_1i_2o_20180726.h5"
+    model_def = get_se_inception_resnet_v2_unet_sigmoid_gn(input_shape=(576, 576, 1), weights=None,
+                                                           output_channels=2)
+    train_generator(model_def, model_saved_path, h5_data_path, batch_size=3, epochs=150,
                     model_weights=model_weights,
-                    gpus=1, verbose=2, csv_log_suffix="0725_0", fold_k=2)
+                    gpus=1, verbose=2, csv_log_suffix="0", fold_k=1)
+    K.clear_session()
 
-    # model_saved_path = "/home/jzhang/helloworld/mtcnn/cb/model_weights/inception_resnet_v2_stage1_fold1.h5"
-    # model_def = get_inception_resnet_v2_unet_sigmoid(input_shape=(576, 576, 2), weights=None, output_channels=1)
-    # train_generator(model_def, model_saved_path, h5_data_path, batch_size=3, epochs=1000,
-    #                 model_weights=model_saved_path,
-    #                 gpus=1, verbose=2, csv_log_suffix="1_0", fold_k=1)
-    #
-    # K.clear_session()
-    #
-    # model_saved_path = "/home/jzhang/helloworld/mtcnn/cb/model_weights/inception_resnet_v2_stage1_fold2.h5"
-    # model_def = get_inception_resnet_v2_unet_sigmoid(input_shape=(576, 576, 1), weights="imagenet", output_channels=1)
-    # train_generator(model_def, model_saved_path, h5_data_path, batch_size=3, epochs=200, model_weights=None,
-    #                 gpus=1, verbose=2, csv_log_suffix="0", fold_k=2)
-    #
-    # K.clear_session()
-    # # model_saved_path = "/home/jzhang/helloworld/mtcnn/cb/model_weights/inception_resnet_v2_stage1_fold2.h5"
-    # model_def = get_inception_resnet_v2_unet_sigmoid(input_shape=(576, 576, 1), weights=None, output_channels=1)
-    # train_generator(model_def, model_saved_path, h5_data_path, batch_size=3, epochs=1000, model_weights=model_saved_path,
-    #                 gpus=1, verbose=2, csv_log_suffix="1", fold_k=2)
-    # K.clear_session()
+    model_saved_path = "/home/jzhang/helloworld/mtcnn/cb/model_weights/se_inception_resnet_v2_gn_fold2_1i_2o_20180726.h5"
+    model_def = get_se_inception_resnet_v2_unet_sigmoid_gn(input_shape=(576, 576, 1), weights=None,
+                                                           output_channels=2)
+    train_generator(model_def, model_saved_path, h5_data_path, batch_size=3, epochs=150,
+                    model_weights=model_weights,
+                    gpus=1, verbose=2, csv_log_suffix="0", fold_k=2)
+    K.clear_session()
 
 
 if __name__ == '__main__':
