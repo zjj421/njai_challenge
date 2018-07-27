@@ -94,7 +94,7 @@ class DataSet(object):
         for key in keys:
             mask = self.f_h5[mask_str][key].value
             masks.append(mask)
-        masks = np.array(masks, dtype=np.uint8)
+        masks = np.array(masks)
         masks = np.expand_dims(masks, axis=-1)
         return masks
 

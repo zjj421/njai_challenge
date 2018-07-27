@@ -227,7 +227,7 @@ def predict_and_save_stage1_result():
 
 def __main():
     np.set_printoptions(threshold=np.inf)
-    # make_hdf5_database()
+    make_hdf5_database()
     # add_train_val_id_hdf5()
     # save_mask_image()
     # show_image()
@@ -236,8 +236,8 @@ def __main():
     # combine_image_mask_predict()
     # read_data_and_show()
     # map_file2index()
-    # add_k_fold_map_hdf5()
-    predict_and_save_stage1_result()
+    add_k_fold_map_hdf5()
+    # predict_and_save_stage1_result()
     pass
 
 
