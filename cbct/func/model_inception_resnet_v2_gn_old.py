@@ -79,7 +79,7 @@ def conv2d_gn(x,
     return x
 
 
-def get_inception_resnet_v2_unet_sigmoid_gn(input_shape=(CONFIG.img_h, CONFIG.img_w, CONFIG.img_c),
+def get_inception_resnet_v2_unet_sigmoid_gn_old(input_shape=(CONFIG.img_h, CONFIG.img_w, CONFIG.img_c),
                                             output_channels=1,
                                             weights='imagenet'):
     inp = Input(input_shape)

@@ -3,24 +3,86 @@
 # Created by zjj421 on 18-6-21
 # Task:
 # Insights:
-import h5py
+
 import os
 from datetime import datetime
 
 import cv2
+import h5py
+import keras.backend as K
 import numpy as np
 import scipy.misc
-from PIL import Image
-from cbct.func.model_inception_resnet_v2 import get_inception_resnet_v2_unet_sigmoid, sigmoid_dice_loss, binary_acc_ch0
+import tensorflow as tf
+from cbct.func.model_inception_resnet_v2 import sigmoid_dice_loss, binary_acc_ch0
+from func.config import Config
 from func.data_io import DataSet
-from func.model_inception_resnet_v2_gn_old import get_inception_resnet_v2_unet_sigmoid_gn
-from keras.models import load_model
+from func.model_inception_resnet_v2_gn import get_inception_resnet_v2_unet_sigmoid_gn
+from func.model_inception_resnet_v2_gn_old import get_inception_resnet_v2_unet_sigmoid_gn_old
+from func.model_se_inception_resnet_v2_gn import get_se_inception_resnet_v2_unet_sigmoid_gn
 from matplotlib import pyplot as plt
 from tqdm import tqdm
-import keras.backend as K
-import tensorflow as tf
-from module.competition_utils import get_pixel_wise_acc
+
+from module.competition_utils import get_pixel_wise_acc, ensemble, convert_submission
 from module.utils_public import apply_mask, get_file_path_list
+
+CONFIG = Config()
+
+
+def inference_from_files():
+    model_def = get_se_inception_resnet_v2_unet_sigmoid_gn(weights=None, output_channels=2)
+    model_weights = ""
+
+
+def make_sub():
+    mask_file_list = ['03+261mask.tif', '03+262mask.tif', '04+246mask.tif', '04+248mask.tif', '04+251mask.tif']
+    test_result_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/CBCT_testingset/CBCT_testingset_pred20180727"
+    sub_json_file_path = "/home/topsky/helloworld/study/njai_challenge/submissions/best_val_acc_sub_20180727.json"
+    dst_mask_file_path_lst = [os.path.join(test_result_dir, x) for x in mask_file_list]
+    convert_submission(dst_mask_file_path_lst, sub_json_file_path)
+
+
+def inference_and_sub():
+    model_def_lst = [
+        get_se_inception_resnet_v2_unet_sigmoid_gn,
+        get_se_inception_resnet_v2_unet_sigmoid_gn,
+        get_se_inception_resnet_v2_unet_sigmoid_gn
+    ]
+    model_weights_lst = [
+        "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/best_val_acc_se_inception_resnet_v2_gn_fold0_1i_2o_20180726.h5",
+        "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/best_val_acc_se_inception_resnet_v2_gn_fold1_1i_2o_20180726.h5",
+        "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/best_val_acc_se_inception_resnet_v2_gn_fold2_1i_2o_20180726.h5"
+    ]
+    sub_json_file_path = "/home/topsky/helloworld/study/njai_challenge/submissions/best_val_acc_sub_20180727.json"
+    test_data_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/CBCT_testingset/CBCT_testingset"
+    test_result_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/CBCT_testingset/CBCT_testingset_pred20180727"
+
+    mask_file_list = ['03+261mask.tif', '03+262mask.tif', '04+246mask.tif', '04+248mask.tif', '04+251mask.tif']
+    image_file_list = ['03+261ori.tif', '03+262ori.tif', '04+246ori.tif', '04+248ori.tif', '04+251ori.tif']
+
+    if not os.path.isdir(test_result_dir):
+        os.makedirs(test_result_dir)
+
+    image_file_path_lst = [os.path.join(test_data_dir, x) for x in image_file_list]
+    dst_mask_file_path_lst = [os.path.join(test_result_dir, x) for x in mask_file_list]
+    masks = []
+    flag = 0
+    for model_def, model_weights in zip(model_def_lst, model_weights_lst):
+        if flag == 0:
+            model_obj = ModelDeployment(model_def(weights=None, output_channels=2), model_weights)
+        else:
+            model_obj.reload_weights(model_weights)
+        flag += 1
+
+        pred = model_obj.predict_from_files(image_file_path_lst)  # (5, 576, 576)
+        print(pred.shape)
+        masks.append(pred)
+    masks = np.transpose(masks, axes=[1, 2, 3, 0])
+    for i in range(len(masks)):
+        pred_ensemble = ensemble(masks[i], threshold=0.5)
+        pred_ensemble = cv2.resize(pred_ensemble, (model_obj.src_img_h, model_obj.src_img_w),
+                                   interpolation=cv2.INTER_NEAREST)
+        cv2.imwrite(dst_mask_file_path_lst[i], pred_ensemble)
+    convert_submission(dst_mask_file_path_lst, sub_json_file_path)
 
 
 class ModelDeployment(object):
@@ -34,6 +96,10 @@ class ModelDeployment(object):
         if show_model:
             self.model.summary()
 
+    def reload_weights(self, model_weights):
+        print("Reloading weights ...")
+        self.model.load_weights(model_weights)
+
     def evaluate(self, x_val, y_val):
         fit_loss = sigmoid_dice_loss
         fit_metrics = [binary_acc_ch0]
@@ -41,7 +107,7 @@ class ModelDeployment(object):
                            optimizer="Adam",
                            metrics=fit_metrics)
         # Score trained model.
-        scores = self.model.evaluate(x_val, y_val, batch_size=4, verbose=1)
+        scores = self.model.evaluate(x_val, y_val, batch_size=5, verbose=1)
         print('Test loss:', scores[0])
         print('Test accuracy:', scores[1])
 
@@ -120,6 +186,11 @@ class ModelDeployment(object):
         imgs = []
         for image_path in tqdm(image_path_lst):
             img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+            if img.shape[0] != CONFIG.img_h or img.shape[1] != CONFIG.img_w:
+                self.src_img_h = img.shape[0]
+                self.src_img_w = img.shape[1]
+                print("src image shape: ({}, {})".format(self.src_img_h, self.src_img_w))
+                img = cv2.resize(img, (CONFIG.img_h, CONFIG.img_w), interpolation=cv2.INTER_NEAREST)
             img = np.expand_dims(img, -1)
             imgs.append(img)
         return np.array(imgs)
@@ -129,6 +200,12 @@ class ModelDeployment(object):
         if use_channels == 1:
             outputs = outputs[..., 0]
         return outputs
+
+    def predict_from_files(self, image_path_lst, batch_size=5):
+        imgs = self.read_images(image_path_lst)
+        imgs = DataSet.preprocess(imgs, mode="image")
+        pred = self.predict(imgs, batch_size=batch_size, use_channels=1)
+        return pred
 
     def predict_from_h5data(self, h5_data_path, val_fold_nb, is_train=False, save_dir=None,
                             color_lst=None):
@@ -167,23 +244,23 @@ class ModelDeployment(object):
         else:
             return y_pred
 
-            # def predict_and_save_image_masks(self, image_path_lst, save_dir, batch_size=32, color=None, alpha=0.5):
-            #     images = self.read_images(image_path_lst)
-            #     images = DataSet.preprocess(images, mode="image")
-            #     masks = self.predict(images, batch_size)
-            #     masks = np.where(masks > 0.5, 255, 0)
-            #
-            #     images = [np.concatenate([image for i in range(3)], axis=-1) for image in images]
-            #     masks = [mask[..., 0] for mask in masks]
-            #
-            #     if color is None:
-            #         color = [0, 191, 255]
-            #     image_masks = [apply_mask(image, mask, color, alpha) for image, mask in zip(images, masks)]
-            #     dst_image_path_lst = [os.path.join(save_dir, os.path.basename(x)) for x in image_path_lst]
-            #     if not os.path.isdir(save_dir):
-            #         os.makedirs(save_dir)
-            #     for i in range(len(image_masks)):
-            #         scipy.misc.toimage(image_masks[i], cmin=0.0, cmax=...).save(dst_image_path_lst[i])
+    # def predict_and_save_image_masks(self, image_path_lst, save_dir, batch_size=32, color=None, alpha=0.5):
+    #     images = self.read_images(image_path_lst)
+    #     images = DataSet.preprocess(images, mode="image")
+    #     masks = self.predict(images, batch_size, use_channels=1)
+    #     masks = np.where(masks > 0.5, 255, 0)
+    #
+    #     images = [np.concatenate([image for i in range(3)], axis=-1) for image in images]
+    #     masks = [mask[..., 0] for mask in masks]
+    #
+    #     if color is None:
+    #         color = [0, 191, 255]
+    #     image_masks = [apply_mask(image, mask, color, alpha) for image, mask in zip(images, masks)]
+    #     dst_image_path_lst = [os.path.join(save_dir, os.path.basename(x)) for x in image_path_lst]
+    #     if not os.path.isdir(save_dir):
+    #         os.makedirs(save_dir)
+    #     for i in range(len(image_masks)):
+    #         scipy.misc.toimage(image_masks[i], cmin=0.0, cmax=...).save(dst_image_path_lst[i])
 
 
 def get_acc(model_def, model_weights, h5_data_path, val_fold_nb, is_train=False):
@@ -205,49 +282,87 @@ def get_acc(model_def, model_weights, h5_data_path, val_fold_nb, is_train=False)
         print(sess.run(acc))
 
 
-# def inference_2stages(model_def_stage1, model_weights_stage1, model_def_stage2, model_weights_stage2, h5_data_path,
-#                       val_fold_nb, pred_save_dir, image_masks_save_dir):
-#     dataset = DataSet(h5_data_path, val_fold_nb)
-#     # keys = dataset.val_keys
-#     keys = dataset.train_keys
-#     images = get_images(dataset.f_h5, keys)
-#     if len(get_file_path_list(pred_save_dir, ".npy")) == 0:
-#         model = model_def_stage1
-#         print("Loading stage1 weights ...")
-#         model.load_weights(model_weights_stage1)
-#         # model.summary()
-#
-#         stage1_outputs = model.predict(images, 4)
-#         print(stage1_outputs.shape)
-#         # K.clear_session()
-#
-#         stage2_inputs = np.concatenate([images, stage1_outputs], axis=-1)
-#         model = model_def_stage2
-#         print("Loading stage2 weights ...")
-#         model.load_weights(model_weights_stage2)
-#         outputs = model.predict(stage2_inputs, 4)
-#         predicted_masks = np.squeeze(outputs, axis=-1)
-#
-#         if not os.path.isdir(pred_save_dir):
-#             os.makedirs(pred_save_dir)
-#         np_save_path = os.path.join(pred_save_dir, "predicted_masks_2stages_fold{}".format(val_fold_nb) + ".npy")
-#         np.save(np_save_path, predicted_masks)
-#     else:
-#         np_save_path = os.path.join(pred_save_dir, "predicted_masks_2stages_fold{}".format(val_fold_nb) + ".npy")
-#
-#         predicted_masks = np.load(np_save_path)
-#
-#     masks = np.where(predicted_masks > 0.5, 1, 0)
-#     images = de_preprocess(images)
-#     images = [np.concatenate([image for i in range(3)], axis=-1) for image in images]
-#
-#     color = [0, 191, 255]
-#     image_masks = [apply_mask(image, mask, color, alpha=0.5) for image, mask in zip(images, masks)]
-#     dst_image_path_lst = [os.path.join(image_masks_save_dir, "{:03}.tif".format(int(x))) for x in keys]
-#     if not os.path.isdir(image_masks_save_dir):
-#         os.makedirs(image_masks_save_dir)
-#     for i in range(len(image_masks)):
-#         cv2.imwrite(dst_image_path_lst[i], image_masks[i])
+def inference_2stages_from_files(model_def_stage1, model_weights_stage1, model_def_stage2, model_weights_stage2,
+                                 file_dir, pred_save_dir):
+    if not os.path.isdir(pred_save_dir):
+        os.makedirs(pred_save_dir)
+    model_obj = ModelDeployment(model_def_stage1, model_weights_stage1)
+    file_path_lst = get_file_path_list(file_dir, ext=".tif")
+    dst_file_path_lst = [os.path.join(pred_save_dir, os.path.basename(x)) for x in file_path_lst]
+
+    imgs_src = model_obj.read_images(file_path_lst)
+    imgs = DataSet.preprocess(imgs_src, mode="image")
+    pred_stage1 = model_obj.predict(imgs, batch_size=5, use_channels=1)
+    pred_stage1 = np.expand_dims(pred_stage1, axis=-1)
+    input_stage2 = np.concatenate([imgs_src, pred_stage1], axis=-1)
+    del model_obj
+    print(pred_stage1.shape)
+    print(input_stage2.shape)
+    model_obj = ModelDeployment(model_def_stage2, model_weights_stage2)
+
+    pred = model_obj.predict(input_stage2, batch_size=5, use_channels=1)
+    pred = model_obj.postprocess(pred)
+    pred = DataSet.de_preprocess(pred, mode="mask")
+    for i in range(len(pred)):
+        cv2.imwrite(dst_file_path_lst[i], pred[i])
+
+
+def do_inference_2stages():
+    model_def_stage1 = get_inception_resnet_v2_unet_sigmoid_gn_old(input_shape=(576, 576, 1), weights=None,
+                                                                   output_channels=1)
+    model_weights_stage1 = "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/inception_resnet_v2_gn_fold1_1i_1o_stage1.h5"
+    model_def_stage2 = get_inception_resnet_v2_unet_sigmoid_gn_old(input_shape=(576, 576, 2), weights=None,
+                                                                   output_channels=1)
+    model_weights_stage2 = "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/inception_resnet_v2_gn_fold1_2i_1o_stage2_20180726.h5"
+    file_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/CBCT_testingset/CBCT_testingset"
+    result_save_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/CBCT_testingset/CBCT_testingset_2stages_pred20180727"
+    inference_2stages_from_files(model_def_stage1, model_weights_stage1, model_def_stage2, model_weights_stage2,
+                                 file_dir, result_save_dir)
+
+
+def inference_2stages(model_def_stage1, model_weights_stage1, model_def_stage2, model_weights_stage2, h5_data_path,
+                      val_fold_nb, pred_save_dir, image_masks_save_dir):
+    dataset = DataSet(h5_data_path, val_fold_nb)
+    # keys = dataset.val_keys
+    keys = dataset.train_keys
+    images = get_images(dataset.f_h5, keys)
+    if len(get_file_path_list(pred_save_dir, ".npy")) == 0:
+        model = model_def_stage1
+        print("Loading stage1 weights ...")
+        model.load_weights(model_weights_stage1)
+        # model.summary()
+
+        stage1_outputs = model.predict(images, 4)
+        print(stage1_outputs.shape)
+        # K.clear_session()
+
+        stage2_inputs = np.concatenate([images, stage1_outputs], axis=-1)
+        model = model_def_stage2
+        print("Loading stage2 weights ...")
+        model.load_weights(model_weights_stage2)
+        outputs = model.predict(stage2_inputs, 4)
+        predicted_masks = np.squeeze(outputs, axis=-1)
+
+        if not os.path.isdir(pred_save_dir):
+            os.makedirs(pred_save_dir)
+        np_save_path = os.path.join(pred_save_dir, "predicted_masks_2stages_fold{}".format(val_fold_nb) + ".npy")
+        np.save(np_save_path, predicted_masks)
+    else:
+        np_save_path = os.path.join(pred_save_dir, "predicted_masks_2stages_fold{}".format(val_fold_nb) + ".npy")
+
+        predicted_masks = np.load(np_save_path)
+
+    masks = np.where(predicted_masks > 0.5, 1, 0)
+    images = de_preprocess(images)
+    images = [np.concatenate([image for i in range(3)], axis=-1) for image in images]
+
+    color = [0, 191, 255]
+    image_masks = [apply_mask(image, mask, color, alpha=0.5) for image, mask in zip(images, masks)]
+    dst_image_path_lst = [os.path.join(image_masks_save_dir, "{:03}.tif".format(int(x))) for x in keys]
+    if not os.path.isdir(image_masks_save_dir):
+        os.makedirs(image_masks_save_dir)
+    for i in range(len(image_masks)):
+        cv2.imwrite(dst_image_path_lst[i], image_masks[i])
 
 
 # def do_infer_2stages():
@@ -272,7 +387,6 @@ def infer_do():
     model_obj.predict_from_h5data(h5_data_path, val_fold_nb=2, is_train=False, save_dir=result_save_dir)
     model_obj.predict_from_h5data(h5_data_path, val_fold_nb=2, is_train=True, save_dir=result_save_dir)
 
-
     # dataset = DataSet(h5_data_path, val_fold_nb=1)
     # keys = dataset.val_keys
     # images = dataset.get_image_by_key(keys[8])
@@ -282,20 +396,24 @@ def infer_do():
 
 
 def do_evaluate():
-    h5_data_path = "/home/zj/helloworld/study/njai_challenge/cbct/inputs/data_0717.hdf5"
-    val_fold_nb = 2
+    h5_data_path = "/home/topsky/helloworld/study/njai_challenge/cbct/inputs/data_0717.hdf5"
+    val_fold_nb = 1
     output_channels = 2
-    is_train = True
-    model_def = get_inception_resnet_v2_unet_sigmoid_gn(weights=None, output_channels=output_channels)
-    model_weights = "/home/zj/helloworld/study/njai_challenge/cbct/model_weights/final_inception_resnet_v2_gn_fold2_1i_2o.h5"
+    is_train = False
+    model_def = get_se_inception_resnet_v2_unet_sigmoid_gn(weights=None, output_channels=output_channels)
+    model_weights = "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/best_val_acc_se_inception_resnet_v2_gn_fold1_1i_2o_20180726.h5"
 
     model_obj = ModelDeployment(model_def, model_weights)
     dataset = DataSet(h5_data_path, val_fold_nb=val_fold_nb)
     images, masks = dataset.prepare_1i_2o_data(is_train=is_train)
     print(images.shape)
     print(masks.shape)
+    # idx_lst = [0, 5, 10, 15, 20]
+    # val_images = np.array([images[i] for i in idx_lst])
+    # val_masks = np.array([masks[i] for i in idx_lst])
+    # model_obj.evaluate(val_images, val_masks)
     model_obj.evaluate(images, masks)
-    get_acc(model_def, model_weights, h5_data_path, val_fold_nb, is_train)
+    # get_acc(model_def, model_weights, h5_data_path, val_fold_nb, is_train)
 
 
 def do_get_acc():
@@ -315,7 +433,10 @@ def __main():
     # do_infer_2stages()
     # do_get_acc()
     # do_evaluate()
-    infer_do()
+    # infer_do()
+    # inference_and_sub()
+    # make_sub()
+    do_inference_2stages()
 
 
 if __name__ == '__main__':

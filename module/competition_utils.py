@@ -4,18 +4,40 @@
 # Task: 
 # Insights: 
 
+import json
+import os
 from datetime import datetime
 
-import os
-from PIL import Image
-import json
 import keras.backend as K
 import numpy as np
 import tensorflow as tf
-from keras.applications import ResNet50
+from PIL import Image
+from collections import Counter
+
+"""
+示例json_file
+[
+{"name": "03+261mask.tif", 
+"size": [3, 3], 
+"pixel": [1, 1, 1, 
+		1, 1, 1, 
+		1, 1, 1]},
+{"name": "03+262mask.tif", 
+"size": [2, 2], 
+"pixel": [2, 2, 
+		2, 2]}
+]
+"""
+
+
+# 提交测试结果为与测试图片大小相同的（单通道）图片，图中仅包含被识别出的牙齿（像素值为255）和背景（像素值为0）。
+
+### 选手提交的文件名称，对应答案集合5个tif文件
+# file_list = ['03+261mask.tif', '03+262mask.tif', '04+246mask.tif', '04+248mask.tif', '04+251mask.tif']
 
 
 def convert_submission(file_path_list, dst_file_path):
+    file_list = [os.path.basename(x) for x in file_path_list]
     if not os.path.isdir(os.path.dirname(dst_file_path)):
         os.makedirs(os.path.dirname(dst_file_path))
     res = []
@@ -28,7 +50,7 @@ def convert_submission(file_path_list, dst_file_path):
             for p in range(x):
                 for q in range(y):
                     tmp_pixel.append(tmp_pic.getpixel((p, q)))  # 遍历每个像素点，把pixel信息存入tmp_pixel
-            data['name'] = file_path_list[i]  # 定义dict的key为name，对应的value存入图片的名称
+            data['name'] = file_list[i]  # 定义dict的key为name，对应的value存入图片的名称
             data['size'] = [x, y]  # 定义dict的key为size，对应的value存入图片的size
             data['pixel'] = tmp_pixel  # 定义dict的key为pixel，对应的value存入图片的pixel
             res.append(data)
@@ -49,6 +71,31 @@ def get_pixel_wise_acc(y_true, y_pred):
     y_true = y_true.astype(np.float64)
     y_pred = y_pred.astype(np.float64)
     return K.mean(K.equal(y_true.flatten(), K.round(y_pred.flatten())), axis=-1)
+
+
+def ensemble(pred_array, threshold=0.5):
+    """
+    mask ensemble.
+    :param pred_array: 3-d numpy array, such as (h, w, c), each channel is a 2-d mask.
+    :threshold: float, if the pixel value > threshold, then the value will convert to 255, else 0.
+    :return: a single mask.
+    """
+    masks = np.asarray(pred_array)
+    masks = np.where(masks > threshold,
+                     255,
+                     0)
+    h, w = masks.shape[:2]
+    ensemble_mask = np.zeros(shape=(h, w), dtype=np.uint8)
+    for i in range(h):
+        for j in range(w):
+            pixel_wise_list = masks[i, j, :]
+            pixel_ensemble = Counter(pixel_wise_list).most_common(1)
+            ensemble_mask[i, j] = pixel_ensemble[0][0]
+    return ensemble_mask
+
+
+def test_ensemble():
+    pass
 
 
 def test_binary_acc():
@@ -72,7 +119,7 @@ def test_binary_acc():
 
 
 def __main():
-    test_binary_acc()
+    test_ensemble()
     pass
 
 

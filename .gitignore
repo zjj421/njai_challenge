@@ -17,12 +17,14 @@ val_lmdb_y/
 *.tar
 **/tensorboard/
 **.npy
+
+**/submissions/
+
 **/model_weights/
 **/inputs/
 **/input/
 **/outputs/
 **/output/
-
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

@@ -17,12 +17,11 @@ import matplotlib.pyplot as plt
 import os
 
 
-def show_training_log(log_csv, fig_save_path=None, show_columns=None, epochs=None):
+def show_training_log(log_csv, fig_save_path=None, show_columns=None, epochs=None, xlim_range=None, ylim_range=None):
     assert isinstance(epochs, int) or epochs is None
     # cnames = ["blue", "green", "red", "cyan", "magenta", "yellow", "black"]
     cnames = ["b", "g", "r", "c", "m", "y", "k"]
     df = pd.read_csv(log_csv)
-    print(df.head())
     columns = list(df.columns)
     assert len(columns) // 2 <= len(cnames)
     if show_columns:
@@ -42,6 +41,11 @@ def show_training_log(log_csv, fig_save_path=None, show_columns=None, epochs=Non
     plt.xlabel("epochs")
     plt.ylabel("metrics")
     plt.legend()
+
+    if xlim_range:
+        plt.xlim(xlim_range[0], xlim_range[1])
+    if ylim_range:
+        plt.ylim(ylim_range[0], ylim_range[1])
 
     title = os.path.splitext(os.path.basename(log_csv))[0]
     plt.title(title)

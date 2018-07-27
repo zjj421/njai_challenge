@@ -12,6 +12,8 @@ from datetime import datetime
 import numpy as np
 
 
+
+
 def random_colors(N, bright=True):
     """
     Generate random colors.
@@ -29,8 +31,8 @@ def apply_mask(image, mask, color, alpha=0.5):
     """
     Apply the given mask to the image.
     Args:
-        image: 3-d numpy array, (h, w, c).
-        mask: 2-d numpy array, (h, w).
+        image: 3-d numpy array, (h, w, c). RGB image, range from 0 to 255.
+        mask: 2-d numpy array, (h, w). Grayscale image, range from 0 to 255.
         color: 3 item list, ie. [0, 191, 255].
         alpha: float, range from 0 to 1.
 
