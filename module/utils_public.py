@@ -14,6 +14,7 @@ import numpy as np
 
 
 
+
 def random_colors(N, bright=True):
     """
     Generate random colors.

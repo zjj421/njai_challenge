@@ -56,55 +56,6 @@ def show_training_log(log_csv, fig_save_path=None, show_columns=None, epochs=Non
         plt.show()
 
 
-def get_input_data(f_obj, tmp_keys, transform, is_train):
-    images = []
-    labels = []
-    for key in tmp_keys:
-        image = f_obj["images"][key].value
-        # 确保images只有一个通道，这里只取一个通道的信息。
-        if len(image.shape) == 3:
-            image = image[:, :, 0]
-        if transform:
-            # label也需要做同样的transform。还没有实现。
-            image = transform(image, seed=1)
-        images.append(image)
-        if is_train:
-            label_1 = f_obj["mask_1"][key].value
-            label_2 = f_obj["mask_2"][key].value
-            # labels.append(label_2)
-            label = np.concatenate([label_1, label_2], 2)
-            labels.append(label)
-    images = np.asarray(images)
-    images = np.expand_dims(images, axis=-1)
-    if is_train:
-        labels = np.asarray(labels)
-        return images, labels
-    else:
-        return images
-
-
-
-
-
-def prepare_all_data(h5_data_path, mode):
-    f = h5py.File(h5_data_path, 'r')
-    assert mode in ['train', 'val']
-    if mode == "train":
-        keys = f["train_id"].value
-    elif mode == "val":
-        keys = f["val_id"].value
-    else:
-        # keys = self.f["test_id"].value
-        raise NotImplementedError
-    keys = [k.tostring().decode() for k in keys]
-    images, labels = get_input_data(f, keys, transform=None, is_train=True)
-    images = preprocess(images, mode="image")
-    labels = preprocess(labels, mode="mask")
-    print(mode, "images.shape: {}".format(images.shape))
-    print(mode, "labels.shape: {}".format(labels.shape))
-    return images, labels
-
-
 def mean_iou(y_true, y_pred):
     prec = []
     for t in np.arange(0.5, 1.0, 0.05):

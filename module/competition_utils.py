@@ -29,11 +29,16 @@ from collections import Counter
 ]
 """
 
-
 # 提交测试结果为与测试图片大小相同的（单通道）图片，图中仅包含被识别出的牙齿（像素值为255）和背景（像素值为0）。
 
 ### 选手提交的文件名称，对应答案集合5个tif文件
 # file_list = ['03+261mask.tif', '03+262mask.tif', '04+246mask.tif', '04+248mask.tif', '04+251mask.tif']
+
+MASK_FILE_LIST = ['03+261mask.tif', '03+262mask.tif', '04+246mask.tif', '04+248mask.tif', '04+251mask.tif']
+
+IMAGE_FILE_LIST = ['03+261ori.tif', '03+262ori.tif', '04+246ori.tif', '04+248ori.tif', '04+251ori.tif']
+
+TEST_DATA_DIR = "/media/topsky/HHH/jzhang_root/data/njai/cbct/CBCT_testingset/CBCT_testingset"
 
 
 def convert_submission(file_path_list, dst_file_path):
@@ -82,15 +87,23 @@ def ensemble(pred_array, threshold=0.5):
     """
     masks = np.asarray(pred_array)
     masks = np.where(masks > threshold,
-                     255,
+                     1,
                      0)
     h, w = masks.shape[:2]
     ensemble_mask = np.zeros(shape=(h, w), dtype=np.uint8)
     for i in range(h):
         for j in range(w):
+            # TODO 奇偶数没区分。
             pixel_wise_list = masks[i, j, :]
-            pixel_ensemble = Counter(pixel_wise_list).most_common(1)
-            ensemble_mask[i, j] = pixel_ensemble[0][0]
+            if sum(pixel_wise_list) > (len(pixel_wise_list) // 2):
+                ensemble_mask[i, j] = 255
+            elif sum(pixel_wise_list) < (len(pixel_wise_list) // 2):
+                ensemble_mask[i, j] = 0
+            else:
+                ensemble_mask[i, j] = np.random.choice([0, 255])
+
+            # pixel_ensemble = Counter(pixel_wise_list).most_common(1)
+            # ensemble_mask[i, j] = pixel_ensemble[0][0]
     return ensemble_mask
 
 

@@ -12,14 +12,17 @@ import numpy as np
 
 class DataSet(object):
     def __init__(self, h5_data_path, val_fold_nb):
-        assert val_fold_nb in [0, 1, 2]
         f_h5 = h5py.File(h5_data_path, 'r')
         k_fold_map = json.loads(f_h5["k_fold_map"].value)
         folds = k_fold_map.keys()
         val_keys = []
         train_keys = []
         for key in folds:
-            if key[0] == str(val_fold_nb):
+            if len(val_fold_nb) == 1:
+                sub_key = key[0]
+            else:
+                sub_key = key
+            if sub_key == val_fold_nb:
                 val_keys.extend(k_fold_map[key])
             else:
                 train_keys.extend(k_fold_map[key])

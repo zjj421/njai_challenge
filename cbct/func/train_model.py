@@ -49,7 +49,7 @@ def get_learning_rate_scheduler(epoch, current_lr):
 
 
 def train_generator(model_def, model_saved_path, h5_data_path, batch_size, epochs, model_weights, gpus=1, verbose=1,
-                    csv_log_suffix="0", fold_k=0):
+                    csv_log_suffix="0", fold_k="0"):
     learning_rate_scheduler = LearningRateScheduler(schedule=get_learning_rate_scheduler, verbose=0)
     opt = Adam(amsgrad=True)
     # opt = SGD()
@@ -169,7 +169,7 @@ def train_generator(model_def, model_saved_path, h5_data_path, batch_size, epoch
         epochs=epochs,
         callbacks=[model_checkpoint0, model_checkpoint1, csv_logger, learning_rate_scheduler],
         verbose=verbose,
-        workers=4,
+        workers=2,
         use_multiprocessing=True,
         shuffle=True
     )
@@ -180,38 +180,28 @@ def train_generator(model_def, model_saved_path, h5_data_path, batch_size, epoch
 
 def __main():
     h5_data_path = "/home/jzhang/helloworld/mtcnn/cb/inputs/data_0717.hdf5"
-    os.makedirs("/home/jzhang/helloworld/mtcnn/cb/model_weights/20180727")
+
+    sub_dir = "/home/jzhang/helloworld/mtcnn/cb/model_weights/20180728_1"
+    if not os.path.isdir(sub_dir):
+        os.makedirs(sub_dir)
     model_weights = "/home/jzhang/helloworld/mtcnn/cb/model_weights/inception_resnet_v2_input1_output2_pretrained_weights.h5"
 
-    model_saved_path = "/home/jzhang/helloworld/mtcnn/cb/model_weights/20180727/se_inception_resnet_v2_gn_fold0_1i_2o_20180727.h5"
-    model_def = get_se_inception_resnet_v2_unet_sigmoid_gn(input_shape=(None, None, 1), weights=None,
-                                                           output_channels=2)
-    train_generator(model_def, model_saved_path, h5_data_path, batch_size=4, epochs=600,
-                    model_weights=model_weights,
-                    gpus=2, verbose=2, csv_log_suffix="0", fold_k=0)
-    K.clear_session()
-
-    model_saved_path = "/home/jzhang/helloworld/mtcnn/cb/model_weights/20180727/se_inception_resnet_v2_gn_fold1_1i_2o_20180727.h5"
-    model_def = get_se_inception_resnet_v2_unet_sigmoid_gn(input_shape=(None, None, 1), weights=None,
-                                                           output_channels=2)
-    train_generator(model_def, model_saved_path, h5_data_path, batch_size=4, epochs=600,
-                    model_weights=model_weights,
-                    gpus=2, verbose=2, csv_log_suffix="0", fold_k=1)
-    K.clear_session()
-
-    model_saved_path = "/home/jzhang/helloworld/mtcnn/cb/model_weights/20180727/se_inception_resnet_v2_gn_fold2_1i_2o_20180727.h5"
-    model_def = get_se_inception_resnet_v2_unet_sigmoid_gn(input_shape=(None, None, 1), weights=None,
-                                                           output_channels=2)
-    train_generator(model_def, model_saved_path, h5_data_path, batch_size=4, epochs=600,
-                    model_weights=model_weights,
-                    gpus=2, verbose=2, csv_log_suffix="0", fold_k=2)
-    K.clear_session()
+    fold_k_lst = ["13", "01", "23", "12", "21", "02", "11", "22"]
+    for fold_k in fold_k_lst:
+        model_saved_path = "/home/jzhang/helloworld/mtcnn/cb/model_weights/20180728_1/se_inception_resnet_v2_gn_fold{}_1i_2o_20180728.h5".format(
+            fold_k)
+        model_def = get_se_inception_resnet_v2_unet_sigmoid_gn(input_shape=(None, None, 1), weights=None,
+                                                               output_channels=2)
+        train_generator(model_def, model_saved_path, h5_data_path, batch_size=2, epochs=250,
+                        model_weights=model_weights,
+                        gpus=1, verbose=2, csv_log_suffix="1", fold_k=fold_k)
+        K.clear_session()
 
 
 if __name__ == '__main__':
     start = datetime.now()
     print("Start time is {}".format(start))
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0, 2"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "2"
     # config = tf.ConfigProto()
     # config.gpu_options.allow_growth = True
     # sess = tf.Session(config=config)

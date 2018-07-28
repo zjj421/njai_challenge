@@ -18,10 +18,22 @@ from PIL import Image
 from func.model_inception_resnet_v2_gn import get_inception_resnet_v2_unet_sigmoid_gn
 from tqdm import tqdm
 
-from module.inference import ModelDeployment
+from module.cbct_utils import concatenate_same_name_image
+from module.inference_base import ModelDeployment
 from module.utils_public import apply_mask, get_file_path_list, random_colors
 import pandas as pd
 import matplotlib.pyplot as plt
+
+
+
+def do_concatenate_same_name_image():
+    dir_lst = ["/media/topsky/HHH/jzhang_root/data/njai/cbct/CBCT_testingset/CBCT_testingset_pred20180728/result_0",
+              "/media/topsky/HHH/jzhang_root/data/njai/cbct/CBCT_testingset/CBCT_testingset_pred20180728/result_1",
+               "/media/topsky/HHH/jzhang_root/data/njai/cbct/CBCT_testingset/CBCT_testingset_pred20180728/result_2",
+               "/media/topsky/HHH/jzhang_root/data/njai/cbct/CBCT_testingset/CBCT_testingset_pred20180728"
+               ]
+    result_save_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/CBCT_testingset/CBCT_testingset_pred20180728/concatenated_iamge"
+    concatenate_same_name_image(dir_lst, result_save_dir)
 
 
 def save_labelme2_mask():
@@ -227,7 +239,7 @@ def predict_and_save_stage1_result():
 
 def __main():
     np.set_printoptions(threshold=np.inf)
-    make_hdf5_database()
+    # make_hdf5_database()
     # add_train_val_id_hdf5()
     # save_mask_image()
     # show_image()
@@ -236,8 +248,9 @@ def __main():
     # combine_image_mask_predict()
     # read_data_and_show()
     # map_file2index()
-    add_k_fold_map_hdf5()
+    # add_k_fold_map_hdf5()
     # predict_and_save_stage1_result()
+    do_concatenate_same_name_image()
     pass
 
 
