@@ -12,7 +12,8 @@ import numpy as np
 from func.data_io import DataSet
 from func.model_se_inception_resnet_v2_gn import get_se_inception_resnet_v2_unet_sigmoid_gn
 
-from module.competition_utils import ensemble, convert_submission, IMAGE_FILE_LIST, MASK_FILE_LIST, TEST_DATA_DIR
+from module.competition_utils import ensemble_from_pred, convert_submission, IMAGE_FILE_LIST, MASK_FILE_LIST, \
+    TEST_DATA_DIR
 from module.inference_base import ModelDeployment, get_acc
 
 
@@ -79,8 +80,8 @@ def do_inference_2stages():
 
 def make_sub():
     mask_file_list = ['03+261mask.tif', '03+262mask.tif', '04+246mask.tif', '04+248mask.tif', '04+251mask.tif']
-    test_result_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/CBCT_testingset/CBCT_testingset_pred20180727"
-    sub_json_file_path = "/home/topsky/helloworld/study/njai_challenge/submissions/best_val_acc_sub_20180727.json"
+    test_result_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/CBCT_testingset/CBCT_testingset_pred20180728_1/result_2"
+    sub_json_file_path = "/home/topsky/helloworld/study/njai_challenge/submissions/CBCT_testingset_pred20180728_1_result_2.json"
     dst_mask_file_path_lst = [os.path.join(test_result_dir, x) for x in mask_file_list]
     convert_submission(dst_mask_file_path_lst, sub_json_file_path)
 
@@ -89,15 +90,25 @@ def inference_and_sub():
     model_def_lst = [
         get_se_inception_resnet_v2_unet_sigmoid_gn,
         get_se_inception_resnet_v2_unet_sigmoid_gn,
-        get_se_inception_resnet_v2_unet_sigmoid_gn
+        get_se_inception_resnet_v2_unet_sigmoid_gn,
+        get_se_inception_resnet_v2_unet_sigmoid_gn,
+        get_se_inception_resnet_v2_unet_sigmoid_gn,
+        get_se_inception_resnet_v2_unet_sigmoid_gn,
+        get_se_inception_resnet_v2_unet_sigmoid_gn,
+        get_se_inception_resnet_v2_unet_sigmoid_gn,
     ]
     model_weights_lst = [
-        "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/20180728/best_val_loss_se_inception_resnet_v2_gn_fold0_1i_2o_20180728.h5",
-        "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/20180728/best_val_loss_se_inception_resnet_v2_gn_fold1_1i_2o_20180728.h5",
-        "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/20180728/best_val_loss_se_inception_resnet_v2_gn_fold2_1i_2o_20180728.h5",
+        "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/20180728_1/best_val_loss_se_inception_resnet_v2_gn_fold01_1i_2o_20180728.h5",
+        "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/20180728_1/best_val_loss_se_inception_resnet_v2_gn_fold02_1i_2o_20180728.h5",
+        "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/20180728_1/best_val_loss_se_inception_resnet_v2_gn_fold11_1i_2o_20180728.h5",
+        "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/20180728_1/best_val_loss_se_inception_resnet_v2_gn_fold12_1i_2o_20180728.h5",
+        "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/20180728_1/best_val_loss_se_inception_resnet_v2_gn_fold13_1i_2o_20180728.h5",
+        "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/20180728_1/best_val_loss_se_inception_resnet_v2_gn_fold21_1i_2o_20180728.h5",
+        "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/20180728_1/best_val_loss_se_inception_resnet_v2_gn_fold22_1i_2o_20180728.h5",
+        "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/20180728_1/best_val_loss_se_inception_resnet_v2_gn_fold23_1i_2o_20180728.h5",
     ]
-    sub_json_file_path = "/home/topsky/helloworld/study/njai_challenge/submissions/best_val_loss_sub_20180728.json"
-    test_result_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/CBCT_testingset/CBCT_testingset_pred20180728"
+    sub_json_file_path = "/home/topsky/helloworld/study/njai_challenge/submissions/best_val_loss_sub_20180729_0_ensemble8.json"
+    test_result_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/CBCT_testingset/CBCT_testingset_pred20180729_0"
 
     if not os.path.isdir(test_result_dir):
         os.makedirs(test_result_dir)
@@ -115,6 +126,7 @@ def inference_and_sub():
         sub_result_save_dir = os.path.join(test_result_dir, "result_{}".format(i))
         if not os.path.isdir(sub_result_save_dir):
             os.makedirs(sub_result_save_dir)
+        # TODO 没有利用第二个输出通道
         pred = model_obj.predict_from_files(image_file_path_lst,
                                             result_save_dir=sub_result_save_dir,
                                             mask_file_lst=MASK_FILE_LIST
@@ -123,13 +135,14 @@ def inference_and_sub():
         masks.append(pred)
     masks = np.transpose(masks, axes=[1, 2, 3, 0])
     for i in range(len(masks)):
-        pred_ensemble = ensemble(masks[i], threshold=0.5)
+        pred_ensemble = ensemble_from_pred(masks[i], threshold=0.5)
         cv2.imwrite(dst_mask_file_path_lst[i], pred_ensemble)
     convert_submission(dst_mask_file_path_lst, sub_json_file_path)
 
 
 def __main():
     K.set_learning_phase(0)
+    # make_sub()
     inference_and_sub()
 
     pass

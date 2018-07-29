@@ -114,6 +114,7 @@ def read_h5_test():
         print(mask.shape)
         exit()
 
+
 def read_data_test():
     data_path = "/home/topsky/helloworld/study/njai_challenge/cbct/inputs/data.hdf5"
     val_id_save_path = "/media/topsky/HHH/jzhang_root/data/njai/cbct/pred_mask_images_20180711/val_id.csv"
@@ -125,20 +126,63 @@ def read_data_test():
     val_series.to_csv(val_id_save_path, index=False)
     print(val_series)
 
+
 def read_image_test():
-    img_path = "/media/zj/share/data/njai_2018/cbct/train/001.tif"
-    img1 = Image.open(img_path).convert("L")
-    img1 = np.array(img1)
-    print(img1.shape)
-    img2 = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
-    print(img2.shape)
-    print(img1.all() == img2.all())
+    # img_path = "/media/topsky/HHH/jzhang_root/data/njai/cbct/CBCT_testingset/CBCT_testingset/04+246ori.tif"
+    img_path = "/home/topsky/Desktop/002.tif"
+    img = cv2.imread(img_path, cv2.IMREAD_UNCHANGED)
+    img_2 = np.concatenate([img, img], axis=0)
+    print(img.shape)
+    h, w, _ = img.shape
+    cols, rows = h, w
+
+    # 1 shift
+    # M_shift = np.float32([[1, 0, 50], [0, 1, 50]])
+    # img_shift = cv2.warpAffine(img, M_shift, (h, w))
+    # result = np.concatenate([img, img_shift], axis=0)
+
+    # 2 rotate
+    # M_rotate = cv2.getRotationMatrix2D((cols / 2, rows / 2), 10, 1)
+    # img_rotate = cv2.warpAffine(img, M_rotate, (cols, rows))
+
+    # 3.affine
+    pts1 = np.float32([[30, 30], [200, 30], [30, 200]])
+    pts2 = np.float32([[0, 100], [200, 50], [100, 250]])
+    M_affine = cv2.getAffineTransform(pts1, pts2)
+    img_affine = cv2.warpAffine(img, M_affine, (cols, rows))
+
+    # 4.perspective
+    # pts3 = np.float32([[56, 65], [368, 52], [28, 387], [389, 390]])
+    # pts4 = np.float32([[0, 0], [300, 0], [0, 300], [300, 300]])
+    # M_perspective = cv2.getPerspectiveTransform(pts3, pts4)
+    # img_perspective = cv2.warpPerspective(img, M_perspective, (cols, rows))
+
+    result = img_affine
+    print(result.shape)
+    # result = np.concatenate([img_rotate, img_2], axis=1)
+    plt.imshow(result)
+    plt.show()
+    exit()
+
+
+    img_resized = cv2.warpAffine(img, )
+    print(img_resized.shape)
+    cv2.imwrite("/home/topsky/Desktop/002.tif", img_resized)
+    img = Image.open("/home/topsky/Desktop/002.tif")
+    print(img.size)
+    img = np.array(img)
+    print(img.shape)
+    exit()
+    if len(img.shape) == 3:
+        print(img[..., 0].all() == img[..., 1].all)
+    print(img.shape)
 
 
 def __main():
     np.set_printoptions(threshold=np.inf)
     # read_h5_test()
-    do_show_training_log()
+    # do_show_training_log()
+    read_image_test()
     pass
 
 

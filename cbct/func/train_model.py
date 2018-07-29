@@ -105,7 +105,7 @@ def train_generator(model_def, model_saved_path, h5_data_path, batch_size, epoch
     #                            zoom_range=0.1, )
     train_data_gen_args = dict(featurewise_center=False,
                                featurewise_std_normalization=False,
-                               rotation_range=20,
+                               rotation_range=15,
                                width_shift_range=0.1,
                                height_shift_range=0.1,
                                horizontal_flip=True,
@@ -186,7 +186,8 @@ def __main():
         os.makedirs(sub_dir)
     model_weights = "/home/jzhang/helloworld/mtcnn/cb/model_weights/inception_resnet_v2_input1_output2_pretrained_weights.h5"
 
-    fold_k_lst = ["13", "01", "23", "12", "21", "02", "11", "22"]
+    # fold_k_lst = ["13", "01", "23", "12", "21", "02", "11", "22"]
+    fold_k_lst = ["02", "11", "22"]
     for fold_k in fold_k_lst:
         model_saved_path = "/home/jzhang/helloworld/mtcnn/cb/model_weights/20180728_1/se_inception_resnet_v2_gn_fold{}_1i_2o_20180728.h5".format(
             fold_k)

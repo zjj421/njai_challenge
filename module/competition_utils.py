@@ -78,7 +78,33 @@ def get_pixel_wise_acc(y_true, y_pred):
     return K.mean(K.equal(y_true.flatten(), K.round(y_pred.flatten())), axis=-1)
 
 
-def ensemble(pred_array, threshold=0.5):
+def ensemble_from_masks(masks):
+    """
+        mask ensemble.
+        :param masks: 3-d numpy array, such as (h, w, c), each channel is a 2-d mask.
+        :return: a single mask.
+    """
+    masks = np.where(masks == 255,
+                     1,
+                     0)
+    h, w = masks.shape[:2]
+    ensemble_mask = np.zeros(shape=(h, w), dtype=np.uint8)
+    for i in range(h):
+        for j in range(w):
+            pixel_wise_list = masks[i, j, :]
+            if sum(pixel_wise_list) > (len(pixel_wise_list) // 2):
+                ensemble_mask[i, j] = 255
+            elif sum(pixel_wise_list) < (len(pixel_wise_list) // 2):
+                ensemble_mask[i, j] = 0
+            else:
+                ensemble_mask[i, j] = np.random.choice([0, 255])
+
+            # pixel_ensemble = Counter(pixel_wise_list).most_common(1)
+            # ensemble_mask[i, j] = pixel_ensemble[0][0]
+    return ensemble_mask
+
+
+def ensemble_from_pred(pred_array, threshold=0.5):
     """
     mask ensemble.
     :param pred_array: 3-d numpy array, such as (h, w, c), each channel is a 2-d mask.
@@ -93,7 +119,6 @@ def ensemble(pred_array, threshold=0.5):
     ensemble_mask = np.zeros(shape=(h, w), dtype=np.uint8)
     for i in range(h):
         for j in range(w):
-            # TODO 奇偶数没区分。
             pixel_wise_list = masks[i, j, :]
             if sum(pixel_wise_list) > (len(pixel_wise_list) // 2):
                 ensemble_mask[i, j] = 255
