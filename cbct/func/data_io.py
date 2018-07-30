@@ -5,27 +5,39 @@
 # Insights:
 import json
 from datetime import datetime
-
+import os
 import h5py
 import numpy as np
 
 
 class DataSet(object):
-    def __init__(self, h5_data_path, val_fold_nb):
+    def __init__(self, h5_data_path, val_fold_nb, random_k_fold=False):
         f_h5 = h5py.File(h5_data_path, 'r')
         k_fold_map = json.loads(f_h5["k_fold_map"].value)
         folds = k_fold_map.keys()
-        val_keys = []
-        train_keys = []
-        for key in folds:
-            if len(val_fold_nb) == 1:
-                sub_key = key[0]
+        if random_k_fold:
+            val_fold_nb = int(val_fold_nb)
+            if os.path.isfile("random_kfold.np"):
+                all_keys_array = np.load("random_kfold.np")
             else:
-                sub_key = key
-            if sub_key == val_fold_nb:
-                val_keys.extend(k_fold_map[key])
-            else:
-                train_keys.extend(k_fold_map[key])
+                all_keys = list(f_h5["images"].keys())
+                np.random.shuffle(all_keys)
+                all_keys_array = np.array(all_keys).reshape(10, -1)
+                np.save("random_kfold.np", all_keys_array)
+            val_keys = all_keys_array[val_fold_nb]
+            train_keys = np.setdiff1d(all_keys_array.flatten(), val_keys)
+        else:
+            val_keys = []
+            train_keys = []
+            for key in folds:
+                if len(val_fold_nb) == 1:
+                    sub_key = key[0]
+                else:
+                    sub_key = key
+                if sub_key == val_fold_nb:
+                    val_keys.extend(k_fold_map[key])
+                else:
+                    train_keys.extend(k_fold_map[key])
         self.f_h5 = f_h5
         self.train_keys = train_keys
         self.val_keys = val_keys

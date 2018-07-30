@@ -17,6 +17,26 @@ import matplotlib.pyplot as plt
 import os
 
 
+def is_grayscale(image):
+    return np.allclose(image[..., 0], image[..., 1], atol=0.001) and np.allclose(image[..., 1], image[..., 2],
+                                                                                 atol=0.001)
+
+
+def getContour(mask):
+    ### generate bound
+    mask_pad = np.pad(mask, ((1, 1), (1, 1)), 'constant')
+    h, w = mask.shape
+    contour = np.zeros((h, w), dtype=np.bool)
+    for i in range(3):
+        for j in range(3):
+            if i == j == 1:
+                continue
+            edge = (np.float32(mask) - np.float32(mask_pad[i:i + h, j:j + w])) > 0
+            contour = np.logical_or(contour, edge)
+    contour = np.uint8(contour * 255)
+    return contour
+
+
 def freeze_model(model, freeze_before_layer):
     if freeze_before_layer == "ALL":
         for l in model.layers:

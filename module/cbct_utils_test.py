@@ -19,8 +19,8 @@ from module.utils_public import apply_mask
 
 
 def do_show_training_log():
-    log_csv = "/home/topsky/helloworld/study/njai_challenge/cbct/logs/log_se_inception_resnet_v2_gn_fold13_1i_2o_20180728_1.csv"
-    show_training_log(log_csv, fig_save_path=None, show_columns=None, epochs=300, ylim_range=None)
+    log_csv = "/home/topsky/helloworld/study/njai_challenge/cbct/logs/log_densenet_bn_fold01_1i_2o_20180730_0.csv"
+    show_training_log(log_csv, fig_save_path=None, show_columns=None, epochs=100, ylim_range=(0, 1))
 
 
 def show_image():
@@ -181,8 +181,8 @@ def read_image_test():
 def __main():
     np.set_printoptions(threshold=np.inf)
     # read_h5_test()
-    # do_show_training_log()
-    read_image_test()
+    do_show_training_log()
+    # read_image_test()
     pass
 
 

@@ -17,9 +17,9 @@ val_lmdb_y/
 *.tar
 **/tensorboard/
 **.npy
-
+**/logs/
 **/submissions/
-
+**/result/
 **/model_weights/
 **/inputs/
 **/input/

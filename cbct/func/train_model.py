@@ -14,9 +14,11 @@ from keras.callbacks import ModelCheckpoint, CSVLogger, LearningRateScheduler
 from keras.optimizers import Adam
 from keras.preprocessing.image import ImageDataGenerator
 from keras.utils import multi_gpu_model
-
+import tensorflow as tf
+import keras.backend.tensorflow_backend as KTF
 from func.config import Config
 from func.data_io import DataSet
+from func.model_densenet import get_densenet121_unet_sigmoid_gn
 from func.model_inception_resnet_v2 import get_inception_resnet_v2_unet_sigmoid, \
     dice_coef_rounded_ch0, dice_coef_rounded_ch1, sigmoid_dice_loss, binary_acc_ch0, dice_coef, \
     sigmoid_dice_loss_1channel_output
@@ -49,7 +51,7 @@ def get_learning_rate_scheduler(epoch, current_lr):
 
 
 def train_generator(model_def, model_saved_path, h5_data_path, batch_size, epochs, model_weights, gpus=1, verbose=1,
-                    csv_log_suffix="0", fold_k="0"):
+                    csv_log_suffix="0", fold_k="0", random_k_fold=False):
     learning_rate_scheduler = LearningRateScheduler(schedule=get_learning_rate_scheduler, verbose=0)
     opt = Adam(amsgrad=True)
     # opt = SGD()
@@ -80,10 +82,11 @@ def train_generator(model_def, model_saved_path, h5_data_path, batch_size, epoch
         print("Model weights {} have been loaded.".format(model_weights))
     else:
         model = model_def
+
         print("Model created.")
 
     # prepare train and val data.
-    dataset = DataSet(h5_data_path, val_fold_nb=fold_k)
+    dataset = DataSet(h5_data_path, val_fold_nb=fold_k, random_k_fold=random_k_fold)
     # x_train, y_train = dataset.prepare_stage2_data(is_train=True)
     x_train, y_train = dataset.prepare_1i_2o_data(is_train=True)
     print(x_train.shape)
@@ -115,7 +118,7 @@ def train_generator(model_def, model_saved_path, h5_data_path, batch_size, epoch
     train_image_datagen = ImageDataGenerator(**train_data_gen_args)
     train_mask_datagen = ImageDataGenerator(**train_data_gen_args)
     # Provide the same seed and keyword arguments to the fit and flow methods
-    seed = 12488421
+    seed = np.random.randint(12488421)
     # train_image_datagen.fit(x_train, augment=True, seed=seed)
     # train_mask_datagen.fit(y_train, augment=True, seed=seed)
     train_image_generator = train_image_datagen.flow(x_train, None, batch_size, shuffle=True, seed=seed)
@@ -181,32 +184,37 @@ def train_generator(model_def, model_saved_path, h5_data_path, batch_size, epoch
 def __main():
     h5_data_path = "/home/jzhang/helloworld/mtcnn/cb/inputs/data_0717.hdf5"
 
-    sub_dir = "/home/jzhang/helloworld/mtcnn/cb/model_weights/20180728_1"
+    sub_dir = "/home/jzhang/helloworld/mtcnn/cb/model_weights/20180730_2"
     if not os.path.isdir(sub_dir):
         os.makedirs(sub_dir)
-    model_weights = "/home/jzhang/helloworld/mtcnn/cb/model_weights/inception_resnet_v2_input1_output2_pretrained_weights.h5"
+    model_weights = "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/densenet_input1_output2_pretrained_weights.h5"
 
-    # fold_k_lst = ["13", "01", "23", "12", "21", "02", "11", "22"]
-    fold_k_lst = ["02", "11", "22"]
+    fold_k_lst = ["13", "01", "23", "12", "21", "02", "11", "22"] + ["0", "1", "2"] + list(range(10))
+    random_k_fold = False
     for fold_k in fold_k_lst:
-        model_saved_path = "/home/jzhang/helloworld/mtcnn/cb/model_weights/20180728_1/se_inception_resnet_v2_gn_fold{}_1i_2o_20180728.h5".format(
+        if isinstance(fold_k, int):
+            fold_k = str(fold_k)
+            random_k_fold = True
+        model_saved_path = "/home/jzhang/helloworld/mtcnn/cb/model_weights/20180730_2/densenet_bn_fold{}_1i_2o_20180730.h5".format(
             fold_k)
-        model_def = get_se_inception_resnet_v2_unet_sigmoid_gn(input_shape=(None, None, 1), weights=None,
-                                                               output_channels=2)
-        train_generator(model_def, model_saved_path, h5_data_path, batch_size=2, epochs=250,
-                        model_weights=model_weights,
-                        gpus=1, verbose=2, csv_log_suffix="1", fold_k=fold_k)
+        model_def = get_densenet121_unet_sigmoid_gn(input_shape=(None, None, 1), weights=None,
+                                                    output_channels=2)
+
+        train_generator(model_def, model_saved_path, h5_data_path, batch_size=3, epochs=220,
+                        model_weights=None,
+                        gpus=1, verbose=2, csv_log_suffix="0", fold_k=fold_k, random_k_fold=random_k_fold)
+        random_k_fold = False
         K.clear_session()
 
 
 if __name__ == '__main__':
     start = datetime.now()
     print("Start time is {}".format(start))
-    os.environ["CUDA_VISIBLE_DEVICES"] = "2"
-    # config = tf.ConfigProto()
-    # config.gpu_options.allow_growth = True
-    # sess = tf.Session(config=config)
-    # KTF.set_session(sess)
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+    config = tf.ConfigProto()
+    config.gpu_options.allow_growth = True
+    sess = tf.Session(config=config)
+    KTF.set_session(sess)
 
     __main()
     end = datetime.now()

@@ -106,13 +106,15 @@ class ModelDeployment(object):
             outputs = outputs[..., 0]
         return outputs
 
-    def predict_from_files(self, image_path_lst, batch_size=5, result_save_dir=None, mask_file_lst=None):
+    def predict_from_files(self, image_path_lst, batch_size=5, use_channels=1, result_save_dir=None,
+                           mask_file_lst=None, use_npy=False):
         """
         给定图片路径列表，返回预测结果（未处理过的），如果指定了预测结果保存路径，则保存预测结果（已处理过的）。
         如果指定了预测结果保存的文件名列表，则该列表必须与image_path_lst一致。
         Args:
             image_path_lst: list.
             batch_size:
+            use_channels: 输出几个channel。
             result_save_dir:　预测结果保存的目录。
             mask_file_lst: list, 预测结果保存的文件名列表。
 
@@ -121,18 +123,61 @@ class ModelDeployment(object):
         """
         imgs = self.read_images(image_path_lst)
         imgs = DataSet.preprocess(imgs, mode="image")
-        pred = self.predict(imgs, batch_size=batch_size, use_channels=1)
+        pred = self.predict(imgs, batch_size=batch_size, use_channels=use_channels)
         if result_save_dir:
             if not os.path.isdir(result_save_dir):
                 os.makedirs(result_save_dir)
-            mask_path_lst = [os.path.join(result_save_dir, x) for x in mask_file_lst]
-            # 将预测结果转换为0-1数组。
-            pred = self.postprocess(pred)
-            # 将0-1数组转换为0-255数组。
-            pred = DataSet.de_preprocess(pred, mode="mask")
-            for i in range(len(pred)):
-                cv2.imwrite(mask_path_lst[i], pred[i])
+            if use_channels == 2:
+                if use_npy:
+                    # 保存npy文件
+                    pred_np_path_lst = [os.path.join(result_save_dir, os.path.splitext(x)[0] + ".npy") for x in
+                                        mask_file_lst]
+                    for i in range(len(pred)):
+                        np.save(pred_np_path_lst[i], pred[i])
+                else:
+                    mask0_save_dir = os.path.join(result_save_dir, "mask0")
+                    mask1_save_dir = os.path.join(result_save_dir, "mask1")
+                    if not os.path.isdir(mask0_save_dir):
+                        os.makedirs(mask0_save_dir)
+                    if not os.path.isdir(mask1_save_dir):
+                        os.makedirs(mask1_save_dir)
+                    pred_mask0 = pred[..., 0]
+                    pred_mask1 = pred[..., 1]
+
+                    mask0_path_lst = [os.path.join(mask0_save_dir, x) for x in mask_file_lst]
+                    mask1_path_lst = [os.path.join(mask1_save_dir, x) for x in mask_file_lst]
+                    # 将预测结果转换为0-1数组。
+                    pred_mask0 = self.postprocess(pred_mask0)
+                    pred_mask1 = self.postprocess(pred_mask1)
+                    # 将0-1数组转换为0-255数组。
+                    pred_mask0 = DataSet.de_preprocess(pred_mask0, mode="mask")
+                    pred_mask1 = DataSet.de_preprocess(pred_mask1, mode="mask")
+                    for i in range(len(pred)):
+                        cv2.imwrite(mask0_path_lst[i], pred_mask0[i])
+                        cv2.imwrite(mask1_path_lst[i], pred_mask1[i])
+
+            else:
+                if use_npy:
+                    raise NotImplemented
+                else:
+                    mask_path_lst = [os.path.join(result_save_dir, x) for x in mask_file_lst]
+                    # 将预测结果转换为0-1数组。
+                    pred = self.postprocess(pred)
+                    # 将0-1数组转换为0-255数组。
+                    pred = DataSet.de_preprocess(pred, mode="mask")
+                    for i in range(len(pred)):
+                        cv2.imwrite(mask_path_lst[i], pred[i])
             print("预测结果已保存。")
+        if use_channels == 2:
+            if use_npy:
+                pass
+            else:
+                pred_mask0 = pred[..., 0]
+                pred_mask1 = pred[..., 1]
+                pred_mask1 = np.where(pred_mask1 > 0.5,
+                                      1,
+                                      0)
+                pred = np.multiply(pred_mask0, pred_mask1)
         return pred
 
     def predict_and_show(self, image, show_output_channels):

@@ -10,6 +10,7 @@ import keras.backend as K
 import cv2
 import numpy as np
 from func.data_io import DataSet
+from func.model_inception_resnet_v2_gn import get_inception_resnet_v2_unet_sigmoid_gn
 from func.model_se_inception_resnet_v2_gn import get_se_inception_resnet_v2_unet_sigmoid_gn
 
 from module.competition_utils import ensemble_from_pred, convert_submission, IMAGE_FILE_LIST, MASK_FILE_LIST, \
@@ -28,13 +29,14 @@ def do_get_acc():
 
 
 def infer_do():
-    h5_data_path = "/home/zj/helloworld/study/njai_challenge/cbct/inputs/data_0717.hdf5"
-    result_save_dir = "/media/zj/share/data/njai_2018/cbct/result/image_mask_preds20180727"
-    model_weights = "/home/zj/helloworld/study/njai_challenge/cbct/model_weights/final_inception_resnet_v2_gn_fold2_1i_2o.h5"
-    model_def = get_inception_resnet_v2_unet_sigmoid_gn(weights=None, output_channels=2)
+    val_fold_nb = "01"
+    h5_data_path = "/home/topsky/helloworld/study/njai_challenge/cbct/inputs/data_0717.hdf5"
+    result_save_dir = "/home/topsky/helloworld/study/njai_challenge/cbct/result/image_mask_preds20180730"
+    model_weights = "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/20180730_1/best_val_loss_densenet_bn_fold01_1i_2o_20180730.h5"
+    model_def = get_densenet121_unet_sigmoid(weights=None, output_channels=2)
     model_obj = ModelDeployment(model_def, model_weights)
-    model_obj.predict_from_h5data(h5_data_path, val_fold_nb=2, is_train=False, save_dir=result_save_dir)
-    model_obj.predict_from_h5data(h5_data_path, val_fold_nb=2, is_train=True, save_dir=result_save_dir)
+    model_obj.predict_from_h5data(h5_data_path, val_fold_nb=val_fold_nb, is_train=False, save_dir=result_save_dir)
+    model_obj.predict_from_h5data(h5_data_path, val_fold_nb=val_fold_nb, is_train=True, save_dir=result_save_dir)
 
     # dataset = DataSet(h5_data_path, val_fold_nb=1)
     # keys = dataset.val_keys
@@ -46,11 +48,11 @@ def infer_do():
 
 def do_evaluate():
     h5_data_path = "/home/topsky/helloworld/study/njai_challenge/cbct/inputs/data_0717.hdf5"
-    val_fold_nb = 1
+    val_fold_nb = "01"
     output_channels = 2
     is_train = False
     model_def = get_se_inception_resnet_v2_unet_sigmoid_gn(weights=None, output_channels=output_channels)
-    model_weights = "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/best_val_acc_se_inception_resnet_v2_gn_fold1_1i_2o_20180726.h5"
+    model_weights = "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/20180728_1/best_val_loss_se_inception_resnet_v2_gn_fold01_1i_2o_20180728.h5"
 
     model_obj = ModelDeployment(model_def, model_weights)
     dataset = DataSet(h5_data_path, val_fold_nb=val_fold_nb)
@@ -65,19 +67,6 @@ def do_evaluate():
     # get_acc(model_def, model_weights, h5_data_path, val_fold_nb, is_train)
 
 
-def do_inference_2stages():
-    model_def_stage1 = get_inception_resnet_v2_unet_sigmoid_gn_old(input_shape=(576, 576, 1), weights=None,
-                                                                   output_channels=1)
-    model_weights_stage1 = "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/inception_resnet_v2_gn_fold1_1i_1o_stage1.h5"
-    model_def_stage2 = get_inception_resnet_v2_unet_sigmoid_gn_old(input_shape=(576, 576, 2), weights=None,
-                                                                   output_channels=1)
-    model_weights_stage2 = "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/inception_resnet_v2_gn_fold1_2i_1o_stage2_20180726.h5"
-    file_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/CBCT_testingset/CBCT_testingset"
-    result_save_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/CBCT_testingset/CBCT_testingset_2stages_pred20180727"
-    inference_2stages_from_files(model_def_stage1, model_weights_stage1, model_def_stage2, model_weights_stage2,
-                                 file_dir, result_save_dir)
-
-
 def make_sub():
     mask_file_list = ['03+261mask.tif', '03+262mask.tif', '04+246mask.tif', '04+248mask.tif', '04+251mask.tif']
     test_result_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/CBCT_testingset/CBCT_testingset_pred20180728_1/result_2"
@@ -87,28 +76,17 @@ def make_sub():
 
 
 def inference_and_sub():
+    use_channels = 2
     model_def_lst = [
-        get_se_inception_resnet_v2_unet_sigmoid_gn,
-        get_se_inception_resnet_v2_unet_sigmoid_gn,
-        get_se_inception_resnet_v2_unet_sigmoid_gn,
-        get_se_inception_resnet_v2_unet_sigmoid_gn,
-        get_se_inception_resnet_v2_unet_sigmoid_gn,
-        get_se_inception_resnet_v2_unet_sigmoid_gn,
-        get_se_inception_resnet_v2_unet_sigmoid_gn,
-        get_se_inception_resnet_v2_unet_sigmoid_gn,
-    ]
+                        get_se_inception_resnet_v2_unet_sigmoid_gn
+                    ] * 10
     model_weights_lst = [
-        "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/20180728_1/best_val_loss_se_inception_resnet_v2_gn_fold01_1i_2o_20180728.h5",
-        "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/20180728_1/best_val_loss_se_inception_resnet_v2_gn_fold02_1i_2o_20180728.h5",
-        "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/20180728_1/best_val_loss_se_inception_resnet_v2_gn_fold11_1i_2o_20180728.h5",
-        "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/20180728_1/best_val_loss_se_inception_resnet_v2_gn_fold12_1i_2o_20180728.h5",
-        "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/20180728_1/best_val_loss_se_inception_resnet_v2_gn_fold13_1i_2o_20180728.h5",
-        "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/20180728_1/best_val_loss_se_inception_resnet_v2_gn_fold21_1i_2o_20180728.h5",
-        "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/20180728_1/best_val_loss_se_inception_resnet_v2_gn_fold22_1i_2o_20180728.h5",
-        "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/20180728_1/best_val_loss_se_inception_resnet_v2_gn_fold23_1i_2o_20180728.h5",
+        "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/20180730_0/best_val_loss_se_inception_resnet_v2_gn_fold{}_1i_2o_20180730.h5".format(
+            x)
+        for x in range(10)
     ]
-    sub_json_file_path = "/home/topsky/helloworld/study/njai_challenge/submissions/best_val_loss_sub_20180729_0_ensemble8.json"
-    test_result_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/CBCT_testingset/CBCT_testingset_pred20180729_0"
+    sub_json_file_path = "/home/topsky/helloworld/study/njai_challenge/submissions/best_val_loss_sub_20180730_0_ensemble10_c2.json"
+    test_result_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/CBCT_testingset/CBCT_testingset_pred20180730_npy"
 
     if not os.path.isdir(test_result_dir):
         os.makedirs(test_result_dir)
@@ -126,10 +104,11 @@ def inference_and_sub():
         sub_result_save_dir = os.path.join(test_result_dir, "result_{}".format(i))
         if not os.path.isdir(sub_result_save_dir):
             os.makedirs(sub_result_save_dir)
-        # TODO 没有利用第二个输出通道
         pred = model_obj.predict_from_files(image_file_path_lst,
+                                            use_channels=use_channels,
                                             result_save_dir=sub_result_save_dir,
-                                            mask_file_lst=MASK_FILE_LIST
+                                            mask_file_lst=MASK_FILE_LIST,
+                                            use_npy=False
                                             )  # (5, 576, 576)
         print(pred.shape)
         masks.append(pred)
@@ -140,11 +119,26 @@ def inference_and_sub():
     convert_submission(dst_mask_file_path_lst, sub_json_file_path)
 
 
+def ensemble_npy():
+    dir_lst = [
+        "/media/topsky/HHH/jzhang_root/data/njai/cbct/CBCT_testingset/CBCT_testingset_pred20180730_npy/result_{}".format(
+            x) for x in range(10)]
+    mask0 = []
+    mask1 = []
+    for dir_ in dir_lst:
+        sub_file_path_lst = [os.path.join(dir_, os.path.splitext(x)[0] + ".npy") for x in MASK_FILE_LIST]
+        for file_path in sub_file_path_lst:
+            pred = np.load(file_path)
+            pred_mask0 = pred[..., 0]
+            pred_mask1 = pred[..., 1]
+
+
 def __main():
     K.set_learning_phase(0)
     # make_sub()
     inference_and_sub()
-
+    # do_evaluate()
+    # infer_do()
     pass
 
 
