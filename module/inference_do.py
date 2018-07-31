@@ -10,6 +10,7 @@ import keras.backend as K
 import cv2
 import numpy as np
 from func.data_io import DataSet
+from func.model_densenet import get_densenet121_unet_sigmoid_gn
 from func.model_inception_resnet_v2_gn import get_inception_resnet_v2_unet_sigmoid_gn
 from func.model_se_inception_resnet_v2_gn import get_se_inception_resnet_v2_unet_sigmoid_gn
 
@@ -69,8 +70,8 @@ def do_evaluate():
 
 def make_sub():
     mask_file_list = ['03+261mask.tif', '03+262mask.tif', '04+246mask.tif', '04+248mask.tif', '04+251mask.tif']
-    test_result_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/CBCT_testingset/CBCT_testingset_pred20180728_1/result_2"
-    sub_json_file_path = "/home/topsky/helloworld/study/njai_challenge/submissions/CBCT_testingset_pred20180728_1_result_2.json"
+    test_result_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/CBCT_testingset/CBCT_testingset_pred20180731_0/result_1/mask0"
+    sub_json_file_path = "/home/topsky/helloworld/study/njai_challenge/submissions/CBCT_testingset_pred20180731_0_result_1.json"
     dst_mask_file_path_lst = [os.path.join(test_result_dir, x) for x in mask_file_list]
     convert_submission(dst_mask_file_path_lst, sub_json_file_path)
 
@@ -78,15 +79,15 @@ def make_sub():
 def inference_and_sub():
     use_channels = 2
     model_def_lst = [
-                        get_se_inception_resnet_v2_unet_sigmoid_gn
-                    ] * 10
+                        get_densenet121_unet_sigmoid_gn
+                    ] * 8
     model_weights_lst = [
-        "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/20180730_0/best_val_loss_se_inception_resnet_v2_gn_fold{}_1i_2o_20180730.h5".format(
+        "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/20180731_0/best_val_loss_se_densenet_gn_fold{}_1i_2o_20180730.h5".format(
             x)
-        for x in range(10)
+        for x in ["13", "01", "23", "12", "21", "02", "11", "22"]
     ]
-    sub_json_file_path = "/home/topsky/helloworld/study/njai_challenge/submissions/best_val_loss_sub_20180730_0_ensemble10_c2.json"
-    test_result_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/CBCT_testingset/CBCT_testingset_pred20180730_npy"
+    sub_json_file_path = "/home/topsky/helloworld/study/njai_challenge/submissions/best_val_loss_sub_20180731_0_ensemble8_c2.json"
+    test_result_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/CBCT_testingset/CBCT_testingset_pred20180731_0"
 
     if not os.path.isdir(test_result_dir):
         os.makedirs(test_result_dir)
@@ -119,24 +120,62 @@ def inference_and_sub():
     convert_submission(dst_mask_file_path_lst, sub_json_file_path)
 
 
-def ensemble_npy():
-    dir_lst = [
-        "/media/topsky/HHH/jzhang_root/data/njai/cbct/CBCT_testingset/CBCT_testingset_pred20180730_npy/result_{}".format(
-            x) for x in range(10)]
-    mask0 = []
-    mask1 = []
-    for dir_ in dir_lst:
-        sub_file_path_lst = [os.path.join(dir_, os.path.splitext(x)[0] + ".npy") for x in MASK_FILE_LIST]
-        for file_path in sub_file_path_lst:
-            pred = np.load(file_path)
-            pred_mask0 = pred[..., 0]
-            pred_mask1 = pred[..., 1]
+def tta_inference_and_sub():
+    use_channels = 2
+    model_def_lst = [
+                        get_se_inception_resnet_v2_unet_sigmoid_gn
+                    ] * 10
+    model_weights_lst = [
+        "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/20180730_0/best_val_loss_se_inception_resnet_v2_gn_fold{}_1i_2o_20180730.h5".format(
+            x)
+        for x in range(10)
+    ]
+    sub_json_file_path = "/home/topsky/helloworld/study/njai_challenge/submissions/best_val_loss_sub_20180731_0_ensemble10_c2_tta.json"
+    test_result_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/CBCT_testingset/CBCT_testingset_pred20180731_tta"
+
+    if not os.path.isdir(test_result_dir):
+        os.makedirs(test_result_dir)
+
+    image_file_path_lst = [os.path.join(TEST_DATA_DIR, x) for x in IMAGE_FILE_LIST]
+    dst_mask_file_path_lst = [os.path.join(test_result_dir, x) for x in MASK_FILE_LIST]
+    masks = []
+    for i, (model_def, model_weights) in enumerate(zip(model_def_lst, model_weights_lst)):
+        if i == 0:
+            model_obj = ModelDeployment(model_def(input_shape=(None, None, 1), weights=None, output_channels=2),
+                                        model_weights)
+        else:
+            model_obj.reload_weights(model_weights)
+
+        sub_result_save_dir = os.path.join(test_result_dir, "result_{}".format(i))
+        if not os.path.isdir(sub_result_save_dir):
+            os.makedirs(sub_result_save_dir)
+        pred = model_obj.tta_predict_from_files(image_file_path_lst,
+                                            use_channels=use_channels,
+                                            result_save_dir=sub_result_save_dir,
+                                            mask_file_lst=MASK_FILE_LIST,
+                                            use_npy=False
+                                            )  # (5, 576, 576)
+        # pred = model_obj.predict_from_files(image_file_path_lst,
+        #                                     use_channels=use_channels,
+        #                                     result_save_dir=sub_result_save_dir,
+        #                                     mask_file_lst=MASK_FILE_LIST,
+        #                                     use_npy=False
+        #                                     )  # (5, 576, 576)
+        print(pred.shape)
+        masks.append(pred)
+    masks = np.transpose(masks, axes=[1, 2, 3, 0])
+    for i in range(len(masks)):
+        pred_ensemble = ensemble_from_pred(masks[i], threshold=0.5)
+        cv2.imwrite(dst_mask_file_path_lst[i], pred_ensemble)
+    convert_submission(dst_mask_file_path_lst, sub_json_file_path)
+
 
 
 def __main():
     K.set_learning_phase(0)
-    # make_sub()
-    inference_and_sub()
+    make_sub()
+    # tta_inference_and_sub()
+    # inference_and_sub()
     # do_evaluate()
     # infer_do()
     pass

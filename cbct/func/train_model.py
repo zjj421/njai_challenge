@@ -96,16 +96,6 @@ def train_generator(model_def, model_saved_path, h5_data_path, batch_size, epoch
     print(x_val.shape)
     print(y_val.shape)
     # we create two instances with the same arguments
-    # train_data_gen_args = dict(featurewise_center=False,
-    #                            featurewise_std_normalization=False,
-    #                            rotation_range=15,
-    #                            width_shift_range=0.1,
-    #                            height_shift_range=0.1,
-    #                            horizontal_flip=True,
-    #                            # vertical_flip=True,
-    #                            # brightness_range=0.1,
-    #                            shear_range=0.1,
-    #                            zoom_range=0.1, )
     train_data_gen_args = dict(featurewise_center=False,
                                featurewise_std_normalization=False,
                                rotation_range=15,
@@ -180,22 +170,26 @@ def train_generator(model_def, model_saved_path, h5_data_path, batch_size, epoch
     final_model_save_path = os.path.join(model_save_root, "final_" + model_save_basename)
     parallel_model.save_weights(final_model_save_path)
 
+    K.clear_session()
+
 
 def __main():
     h5_data_path = "/home/jzhang/helloworld/mtcnn/cb/inputs/data_0717.hdf5"
 
-    sub_dir = "/home/jzhang/helloworld/mtcnn/cb/model_weights/20180730_2"
+    sub_dir = "/home/jzhang/helloworld/mtcnn/cb/model_weights/20180731_0"
     if not os.path.isdir(sub_dir):
         os.makedirs(sub_dir)
-    model_weights = "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/densenet_input1_output2_pretrained_weights.h5"
+    # model_weights = "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/densenet_input1_output2_pretrained_weights.h5"
 
-    fold_k_lst = ["13", "01", "23", "12", "21", "02", "11", "22"] + ["0", "1", "2"] + list(range(10))
+    fold_k_lst = ["01", "23", "12", "21", "02", "11", "22"] + ["0", "1", "2"] + list(range(10))
     random_k_fold = False
     for fold_k in fold_k_lst:
+        print("Starting training fold", fold_k)
         if isinstance(fold_k, int):
             fold_k = str(fold_k)
             random_k_fold = True
-        model_saved_path = "/home/jzhang/helloworld/mtcnn/cb/model_weights/20180730_2/densenet_bn_fold{}_1i_2o_20180730.h5".format(
+        model_saved_path = "/home/jzhang/helloworld/mtcnn/cb/model_weights/{}/se_densenet_gn_fold{}_1i_2o_20180730.h5".format(
+            sub_dir,
             fold_k)
         model_def = get_densenet121_unet_sigmoid_gn(input_shape=(None, None, 1), weights=None,
                                                     output_channels=2)
@@ -204,7 +198,6 @@ def __main():
                         model_weights=None,
                         gpus=1, verbose=2, csv_log_suffix="0", fold_k=fold_k, random_k_fold=random_k_fold)
         random_k_fold = False
-        K.clear_session()
 
 
 if __name__ == '__main__':

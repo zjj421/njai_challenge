@@ -9,11 +9,12 @@ from datetime import datetime
 from keras.layers import Input, BatchNormalization, Conv2D, MaxPooling2D, ZeroPadding2D, concatenate, \
     UpSampling2D, Activation
 from keras.models import Model
-from keras_applications.densenet import dense_block, transition_block, DenseNet121
+from keras_applications.densenet import dense_block, DenseNet121, backend, layers
 from tqdm import tqdm
 
 from func.config import Config
 from func.group_norm import GroupNormalization
+from func.se import squeeze_excite_block
 
 CONFIG = Config()
 GN_AXIS = 3
@@ -34,6 +35,34 @@ def conv_block(prev, num_filters, kernel=(3, 3), strides=(1, 1), act='relu', pre
     return conv
 
 
+def transition_block(x, reduction, name):
+    """A transition block.
+
+    # Arguments
+        x: input tensor.`
+        reduction: float, compression rate at transition layers.
+        name: string, block label.
+
+    # Returns
+        output tensor for the block.
+    """
+    bn_axis = 3 if backend.image_data_format() == 'channels_last' else 1
+    # x = layers.BatchNormalization(axis=bn_axis, epsilon=1.001e-5,
+    #                               name=name + '_bn')(x)
+    x = GroupNormalization(axis=GN_AXIS, groups=4,
+                           scale=False,
+                           name=name + '_gn')(x)
+    x = layers.Activation('relu', name=name + '_relu')(x)
+    x = layers.Conv2D(int(backend.int_shape(x)[bn_axis] * reduction), 1,
+                      use_bias=False,
+                      name=name + '_conv')(x)
+    x = layers.AveragePooling2D(2, strides=2, name=name + '_pool')(x)
+
+    # squeeze and excite block
+    x = squeeze_excite_block(x)
+    return x
+
+
 def get_densenet121_unet_sigmoid_gn(input_shape=(CONFIG.img_h, CONFIG.img_w, CONFIG.img_c),
                                     output_channels=1,
                                     weights='imagenet'):
@@ -43,7 +72,7 @@ def get_densenet121_unet_sigmoid_gn(input_shape=(CONFIG.img_h, CONFIG.img_w, CON
     x = ZeroPadding2D(padding=((3, 3), (3, 3)))(img_input)
     x = Conv2D(64, 7, strides=2, use_bias=False, name='conv1/conv')(x)
 
-    x = GroupNormalization(axis=GN_AXIS, groups=32,
+    x = GroupNormalization(axis=GN_AXIS, groups=16,
                            scale=False,
                            name='conv1/gn')(x)
     x = Activation('relu', name='conv1/relu')(x)
@@ -64,6 +93,9 @@ def get_densenet121_unet_sigmoid_gn(input_shape=(CONFIG.img_h, CONFIG.img_w, CON
                            scale=False,
                            name='conv5/gn')(x)
     conv5 = x
+
+    # squeeze and excite block
+    conv5 = squeeze_excite_block(conv5)
 
     conv6 = conv_block(UpSampling2D()(conv5), 320)
     conv6 = concatenate([conv6, conv4], axis=-1)

@@ -208,7 +208,8 @@ def get_inception_resnet_v2_unet_sigmoid(input_shape=(CONFIG.img_h, CONFIG.img_w
 
 if __name__ == '__main__':
     os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-    model = get_densenet121_unet_softmax(input_shape=(224, 224), weights=None)
+    model = get_inception_resnet_v2_unet_sigmoid(input_shape=(224, 224), weights=None)
+    model.predict_on_batch()
 
     model.summary()
     # exit()
