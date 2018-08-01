@@ -7,6 +7,7 @@
 import os
 from datetime import datetime
 
+import gc
 import keras.backend as K
 import pandas as pd
 from keras import metrics
@@ -64,12 +65,12 @@ def train_generator(model_def, model_saved_path, h5_data_path, batch_size, epoch
 
     # tensorboard = TensorBoard(log_dir='/home/jzhang/helloworld/mtcnn/cb/logs/tensorboard', write_images=True)
 
-    # fit_metrics = [dice_coef, metrics.binary_crossentropy, binary_acc_ch0]
-    # fit_loss = sigmoid_dice_loss_1channel_output
+    fit_metrics = [dice_coef, metrics.binary_crossentropy, binary_acc_ch0]
+    fit_loss = sigmoid_dice_loss_1channel_output
 
-    fit_loss = sigmoid_dice_loss
-    fit_metrics = [dice_coef_rounded_ch0, dice_coef_rounded_ch1, metrics.binary_crossentropy, mean_iou_ch0,
-                   binary_acc_ch0]
+    # fit_loss = sigmoid_dice_loss
+    # fit_metrics = [dice_coef_rounded_ch0, dice_coef_rounded_ch1, metrics.binary_crossentropy, mean_iou_ch0,
+    #                binary_acc_ch0]
     # fit_metrics = [dice_coef_rounded_ch0, metrics.binary_crossentropy, mean_iou_ch0]
     # es = EarlyStopping('val_acc', patience=30, mode="auto", min_delta=0.0)
     # reduce_lr = ReduceLROnPlateau(monitor='val_acc', factor=0.1, patience=20, verbose=2, epsilon=1e-4,
@@ -88,11 +89,11 @@ def train_generator(model_def, model_saved_path, h5_data_path, batch_size, epoch
     # prepare train and val data.
     dataset = DataSet(h5_data_path, val_fold_nb=fold_k, random_k_fold=random_k_fold)
     # x_train, y_train = dataset.prepare_stage2_data(is_train=True)
-    x_train, y_train = dataset.prepare_1i_2o_data(is_train=True)
+    x_train, y_train = dataset.prepare_3i_1o_data(is_train=True)
     print(x_train.shape)
     print(y_train.shape)
     # x_val, y_val = dataset.prepare_stage2_data(is_train=False)
-    x_val, y_val = dataset.prepare_1i_2o_data(is_train=False)
+    x_val, y_val = dataset.prepare_3i_1o_data(is_train=False)
     print(x_val.shape)
     print(y_val.shape)
     # we create two instances with the same arguments
@@ -167,32 +168,38 @@ def train_generator(model_def, model_saved_path, h5_data_path, batch_size, epoch
         shuffle=True
     )
     # model_save_root, model_save_basename = os.path.split(model_saved_path)
-    final_model_save_path = os.path.join(model_save_root, "final_" + model_save_basename)
-    parallel_model.save_weights(final_model_save_path)
+    # final_model_save_path = os.path.join(model_save_root, "final_" + model_save_basename)
+    # model.save_weights(final_model_save_path)
 
+    del model, parallel_model
     K.clear_session()
+    gc.collect()
 
 
 def __main():
     h5_data_path = "/home/jzhang/helloworld/mtcnn/cb/inputs/data_0717.hdf5"
 
-    sub_dir = "/home/jzhang/helloworld/mtcnn/cb/model_weights/20180731_0"
+    sub_dir = "/home/jzhang/helloworld/mtcnn/cb/model_weights/20180801_0"
     if not os.path.isdir(sub_dir):
         os.makedirs(sub_dir)
     # model_weights = "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/densenet_input1_output2_pretrained_weights.h5"
-
-    fold_k_lst = ["01", "23", "12", "21", "02", "11", "22"] + ["0", "1", "2"] + list(range(10))
+    # 覆盖了3个模型！！
+    # fold_k_lst = ["13", "01", "23", "12", "21", "02", "11", "22"] + ["0", "1", "2"] + list(range(10))
+    # fold_k_lst = ["0", "1", "2"]
+    fold_k_lst = ["01"]
     random_k_fold = False
     for fold_k in fold_k_lst:
-        print("Starting training fold", fold_k)
         if isinstance(fold_k, int):
             fold_k = str(fold_k)
             random_k_fold = True
-        model_saved_path = "/home/jzhang/helloworld/mtcnn/cb/model_weights/{}/se_densenet_gn_fold{}_1i_2o_20180730.h5".format(
-            sub_dir,
-            fold_k)
-        model_def = get_densenet121_unet_sigmoid_gn(input_shape=(None, None, 1), weights=None,
-                                                    output_channels=2)
+        print("Starting training fold", fold_k)
+        print("Is random k fold:", random_k_fold)
+        model_saved_path = "/home/jzhang/helloworld/mtcnn/cb/model_weights/{}/se_densenet_gn_fold{}_random_{}_3i_1o_20180801.h5".format(
+            os.path.basename(sub_dir),
+            fold_k,
+            random_k_fold * 1)
+        model_def = get_densenet121_unet_sigmoid_gn(input_shape=(None, None, 3), weights=None,
+                                                    output_channels=1)
 
         train_generator(model_def, model_saved_path, h5_data_path, batch_size=3, epochs=220,
                         model_weights=None,

@@ -19,7 +19,7 @@ from func.model_se_inception_resnet_v2_gn import get_se_inception_resnet_v2_unet
 from matplotlib import pyplot as plt
 from tqdm import tqdm
 
-from module.augmentation import tta_predict_on_batch
+from module.augmentation import tta_predict
 from module.competition_utils import get_pixel_wise_acc
 from module.utils_public import apply_mask, get_file_path_list
 
@@ -91,7 +91,7 @@ class ModelDeployment(object):
             imgs.append(img)
         return np.array(imgs)
 
-    def predict(self, images, batch_size, use_channels=1):
+    def predict(self, images, batch_size, use_channels=2):
         """
         对预处理过的图片进行预测。
         Args:
@@ -107,82 +107,152 @@ class ModelDeployment(object):
             outputs = outputs[..., 0]
         return outputs
 
-    def predict_from_files(self, image_path_lst, batch_size=5, use_channels=1, result_save_dir=None,
-                           mask_file_lst=None, use_npy=False):
+    def predict_from_files(self, image_path_lst, batch_size=5, use_channels=2, mask_file_lst=None, tta=False,
+                           is_save_npy=False, is_save_mask0=False, is_save_mask1=False, result_save_dir=""):
         """
         给定图片路径列表，返回预测结果（未处理过的），如果指定了预测结果保存路径，则保存预测结果（已处理过的）。
-        如果指定了预测结果保存的文件名列表，则该列表必须与image_path_lst一致。
+        如果指定了预测结果保存的文件名列表，则该列表顺序必须与image_path_lst一致；
+        如果没有指定预测结果保存的文件名列表，则自动生成和输入相同的文件名列表。
         Args:
             image_path_lst: list.
             batch_size:
             use_channels: 输出几个channel。
-            result_save_dir:　预测结果保存的目录。
             mask_file_lst: list, 预测结果保存的文件名列表。
-
-        Returns: predicted result.
+            tta: bool, 预测时是否进行数据增强。
+            is_save_npy: bool, 是否保存npy文件。
+            is_save_mask0: bool
+            is_save_mask1: bool
+            result_save_dir: str, 结果保存的目录路径。
+        Returns: 4-d numpy array, predicted result.
 
         """
         imgs = self.read_images(image_path_lst)
         imgs = DataSet.preprocess(imgs, mode="image")
-        pred = self.predict(imgs, batch_size=batch_size, use_channels=use_channels)
-        if result_save_dir:
-            if not os.path.isdir(result_save_dir):
-                os.makedirs(result_save_dir)
-            if use_channels == 2:
-                if use_npy:
-                    # 保存npy文件
-                    pred_np_path_lst = [os.path.join(result_save_dir, os.path.splitext(x)[0] + ".npy") for x in
-                                        mask_file_lst]
-                    for i in range(len(pred)):
-                        np.save(pred_np_path_lst[i], pred[i])
-                else:
-                    mask0_save_dir = os.path.join(result_save_dir, "mask0")
-                    mask1_save_dir = os.path.join(result_save_dir, "mask1")
-                    if not os.path.isdir(mask0_save_dir):
-                        os.makedirs(mask0_save_dir)
-                    if not os.path.isdir(mask1_save_dir):
-                        os.makedirs(mask1_save_dir)
-                    pred_mask0 = pred[..., 0]
-                    pred_mask1 = pred[..., 1]
-
-                    mask0_path_lst = [os.path.join(mask0_save_dir, x) for x in mask_file_lst]
-                    mask1_path_lst = [os.path.join(mask1_save_dir, x) for x in mask_file_lst]
-                    # 将预测结果转换为0-1数组。
-                    pred_mask0 = self.postprocess(pred_mask0)
-                    pred_mask1 = self.postprocess(pred_mask1)
-                    # 将0-1数组转换为0-255数组。
-                    pred_mask0 = DataSet.de_preprocess(pred_mask0, mode="mask")
-                    pred_mask1 = DataSet.de_preprocess(pred_mask1, mode="mask")
-                    for i in range(len(pred)):
-                        cv2.imwrite(mask0_path_lst[i], pred_mask0[i])
-                        cv2.imwrite(mask1_path_lst[i], pred_mask1[i])
-
-            else:
-                if use_npy:
-                    raise NotImplemented
-                else:
-                    mask_path_lst = [os.path.join(result_save_dir, x) for x in mask_file_lst]
-                    # 将预测结果转换为0-1数组。
-                    pred = self.postprocess(pred)
-                    # 将0-1数组转换为0-255数组。
-                    pred = DataSet.de_preprocess(pred, mode="mask")
-                    for i in range(len(pred)):
-                        cv2.imwrite(mask_path_lst[i], pred[i])
-            print("预测结果已保存。")
-        if use_channels == 2:
-            if use_npy:
-                pass
-            else:
-                pred_mask0 = pred[..., 0]
-                pred_mask1 = pred[..., 1]
-                pred_mask1 = np.where(pred_mask1 > 0.5,
-                                      1,
-                                      0)
-                pred = np.multiply(pred_mask0, pred_mask1)
+        if tta:
+            pred = tta_predict(self.model, imgs, batch_size=batch_size)
+        else:
+            pred = self.predict(imgs, batch_size=batch_size, use_channels=use_channels)
+        if mask_file_lst is None:
+            mask_file_lst = [os.path.basename(x) for x in image_path_lst]
+        if is_save_npy:
+            # 保存npy文件
+            npy_dir = os.path.join(result_save_dir, "npy")
+            self.save_npy(pred, mask_file_lst, npy_dir)
+        if is_save_mask0:
+            mask_nb = 0
+            mask_save_dir = os.path.join(result_save_dir, "mask{}".format(mask_nb))
+            self.save_mask(pred, mask_file_lst, mask_nb=mask_nb, result_save_dir=mask_save_dir)
+        if is_save_mask1:
+            mask_nb = 1
+            mask_save_dir = os.path.join(result_save_dir, "mask{}".format(mask_nb))
+            self.save_mask(pred, mask_file_lst, mask_nb=mask_nb, result_save_dir=mask_save_dir)
         return pred
 
+    @staticmethod
+    def read_npy(npy_root_dir, mask_file_lst):
+        npy_file_path_lst = [os.path.join(npy_root_dir, x) for x in mask_file_lst]
+        pred = [np.load(x) for x in npy_file_path_lst]
+        pred = np.array(pred)
+        return pred
+
+    @staticmethod
+    def save_npy(pred, mask_file_lst, result_save_dir):
+        if not os.path.isdir(result_save_dir):
+            os.makedirs(result_save_dir)
+        pred_np_path_lst = [os.path.join(result_save_dir, os.path.splitext(x)[0] + ".npy") for x in
+                            mask_file_lst]
+        for i in range(len(pred)):
+            np.save(pred_np_path_lst[i], pred[i])
+
+    @staticmethod
+    def save_mask(pred, mask_file_lst, mask_nb, result_save_dir):
+        if not os.path.isdir(result_save_dir):
+            os.makedirs(result_save_dir)
+        masks = pred[..., mask_nb]
+        mask_file_path_lst = [os.path.join(result_save_dir, x) for x in mask_file_lst]
+        # 将预测结果转换为0-1数组。
+        masks = ModelDeployment.postprocess(masks)
+        # 将0-1数组转换为0-255数组。
+        masks = DataSet.de_preprocess(masks, mode="mask")
+        for i in range(len(pred)):
+            cv2.imwrite(mask_file_path_lst[i], masks[i])
+
+    # def predict_from_files(self, image_path_lst, batch_size=5, use_channels=1, result_save_dir=None,
+    #                        mask_file_lst=None, use_npy=False):
+    #     """
+    #     给定图片路径列表，返回预测结果（未处理过的），如果指定了预测结果保存路径，则保存预测结果（已处理过的）。
+    #     如果指定了预测结果保存的文件名列表，则该列表必须与image_path_lst一致。
+    #     Args:
+    #         image_path_lst: list.
+    #         batch_size:
+    #         use_channels: 输出几个channel。
+    #         result_save_dir:　预测结果保存的目录。
+    #         mask_file_lst: list, 预测结果保存的文件名列表。
+    #
+    #     Returns: predicted result.
+    #
+    #     """
+    #     imgs = self.read_images(image_path_lst)
+    #     imgs = DataSet.preprocess(imgs, mode="image")
+    #     pred = self.predict(imgs, batch_size=batch_size, use_channels=use_channels)
+    #     if result_save_dir:
+    #         if not os.path.isdir(result_save_dir):
+    #             os.makedirs(result_save_dir)
+    #         if use_channels == 2:
+    #             if use_npy:
+    #                 # 保存npy文件
+    #                 pred_np_path_lst = [os.path.join(result_save_dir, os.path.splitext(x)[0] + ".npy") for x in
+    #                                     mask_file_lst]
+    #                 for i in range(len(pred)):
+    #                     np.save(pred_np_path_lst[i], pred[i])
+    #             else:
+    #                 mask0_save_dir = os.path.join(result_save_dir, "mask0")
+    #                 mask1_save_dir = os.path.join(result_save_dir, "mask1")
+    #                 if not os.path.isdir(mask0_save_dir):
+    #                     os.makedirs(mask0_save_dir)
+    #                 if not os.path.isdir(mask1_save_dir):
+    #                     os.makedirs(mask1_save_dir)
+    #                 pred_mask0 = pred[..., 0]
+    #                 pred_mask1 = pred[..., 1]
+    #
+    #                 mask0_path_lst = [os.path.join(mask0_save_dir, x) for x in mask_file_lst]
+    #                 mask1_path_lst = [os.path.join(mask1_save_dir, x) for x in mask_file_lst]
+    #                 # 将预测结果转换为0-1数组。
+    #                 pred_mask0 = self.postprocess(pred_mask0)
+    #                 pred_mask1 = self.postprocess(pred_mask1)
+    #                 # 将0-1数组转换为0-255数组。
+    #                 pred_mask0 = DataSet.de_preprocess(pred_mask0, mode="mask")
+    #                 pred_mask1 = DataSet.de_preprocess(pred_mask1, mode="mask")
+    #                 for i in range(len(pred)):
+    #                     cv2.imwrite(mask0_path_lst[i], pred_mask0[i])
+    #                     cv2.imwrite(mask1_path_lst[i], pred_mask1[i])
+    #
+    #         else:
+    #             if use_npy:
+    #                 raise NotImplemented
+    #             else:
+    #                 mask_path_lst = [os.path.join(result_save_dir, x) for x in mask_file_lst]
+    #                 # 将预测结果转换为0-1数组。
+    #                 pred = self.postprocess(pred)
+    #                 # 将0-1数组转换为0-255数组。
+    #                 pred = DataSet.de_preprocess(pred, mode="mask")
+    #                 for i in range(len(pred)):
+    #                     cv2.imwrite(mask_path_lst[i], pred[i])
+    #         print("预测结果已保存。")
+    #     if use_channels == 2:
+    #         if use_npy:
+    #             pass
+    #         else:
+    #             pred_mask0 = pred[..., 0]
+    #             pred_mask1 = pred[..., 1]
+    #             pred_mask1 = np.where(pred_mask1 > 0.5,
+    #                                   1,
+    #                                   0)
+    #             pred = np.multiply(pred_mask0, pred_mask1)
+    #     return pred
+
     def tta_predict_from_files(self, image_path_lst, use_channels=1, result_save_dir=None,
-                           mask_file_lst=None, use_npy=False):
+                               mask_file_lst=None, use_npy=False):
         """
         给定图片路径列表，返回预测结果（未处理过的），如果指定了预测结果保存路径，则保存预测结果（已处理过的）。
         如果指定了预测结果保存的文件名列表，则该列表必须与image_path_lst一致。
@@ -201,7 +271,7 @@ class ModelDeployment(object):
         print(imgs.shape)
         preds = []
         for img in imgs:
-            pred = tta_predict_on_batch(self.model, img)
+            pred = tta_predict(self.model, img)
             preds.append(pred)
         preds = np.array(preds)
         if result_save_dir:

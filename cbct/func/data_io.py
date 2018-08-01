@@ -11,7 +11,7 @@ import numpy as np
 
 
 class DataSet(object):
-    def __init__(self, h5_data_path, val_fold_nb, random_k_fold=False):
+    def __init__(self, h5_data_path, val_fold_nb, random_k_fold=False, random_k_fold_npy=None):
         f_h5 = h5py.File(h5_data_path, 'r')
         k_fold_map = json.loads(f_h5["k_fold_map"].value)
         folds = k_fold_map.keys()
@@ -60,6 +60,27 @@ class DataSet(object):
         stage1_predict_masks = self.get_stage1_predict_masks(is_train)
         images = np.concatenate([images, stage1_predict_masks], axis=-1)
         masks = self.get_masks(is_train, 0)
+        masks = self.preprocess(masks, mode="mask")
+
+        return images, masks
+
+    def prepare_3i_2o_data(self, is_train):
+        images = self.get_images(is_train)
+        images = self.preprocess(images, mode="image")
+        images = np.concatenate([images for i in range(3)], axis=-1)
+
+        masks_0 = self.get_masks(is_train, 0)
+        masks_1 = self.get_masks(is_train, 1)
+        masks = np.concatenate([masks_0, masks_1], axis=-1)
+        masks = self.preprocess(masks, mode="mask")
+        return images, masks
+
+    def prepare_3i_1o_data(self, is_train, mask_nb=0):
+        images = self.get_images(is_train)
+        images = self.preprocess(images, mode="image")
+        images = np.concatenate([images for i in range(3)], axis=-1)
+
+        masks = self.get_masks(is_train, mask_nb)
         masks = self.preprocess(masks, mode="mask")
 
         return images, masks

@@ -12,6 +12,8 @@ import cv2
 import numpy as np
 import os
 
+from func.data_io import DataSet
+from func.model_densenet import get_densenet121_unet_sigmoid_gn
 from tqdm import tqdm
 
 
@@ -91,66 +93,107 @@ def do_conver_contour2mask():
 
 
 def rotate(image, angle):
-    # if angle == 0 or -0:
-    #     return image
-    # height, width = image.shape[0:2]
-    # mat = cv2.getRotationMatrix2D((width / 2, height / 2), angle, 1.0)
-    # img = cv2.warpAffine(image, mat, (width, height),
-    #                      flags=cv2.INTER_LINEAR,
-    #                      borderMode=cv2.BORDER_REFLECT_101)
-    # img = np.expand_dims(img, -1)
+    if angle == 0 or -0:
+        return image
+    height, width = image.shape[0:2]
+    mat = cv2.getRotationMatrix2D((width / 2, height / 2), angle, 1.0)
+    img = cv2.warpAffine(image, mat, (width, height),
+                         flags=cv2.INTER_LINEAR,
+                         borderMode=cv2.BORDER_REFLECT_101)
+    if len(img.shape) == 2:
+        img = np.expand_dims(img, -1)
+    return img
 
-    return image
+
+def rotate_images(images, angle):
+    rotated_images = np.zeros_like(images)
+    for i in range(len(images)):
+        rotated_image = rotate(images[i], angle)
+        rotated_images[i] = rotated_image
+    return rotated_images
 
 
 def hflip(img, is_flip=1):
+    assert len(img.shape) == 2 or len(img.shape) == 3
     if is_flip:
-        return np.expand_dims(cv2.flip(img, 1), -1)
+        return np.flip(img, 1)
     else:
         return img
 
 
-def tta_predict_on_batch(model, image):
+def hflip_images(images, is_flip=1):
+    assert len(images.shape) == 4
+    if is_flip:
+        return np.flip(images, 2)
+    else:
+        return images
+
+
+def tta_test():
+    img = cv2.imread("/media/topsky/HHH/jzhang_root/data/njai/cbct/CBCT_testingset/CBCT_testingset/04+246ori.tif",
+                     cv2.IMREAD_GRAYSCALE)
+    img = np.expand_dims(img, axis=-1)
+    img = DataSet.preprocess(img, mode="image")
+    img = np.expand_dims(img, axis=0)
+
+    model = get_densenet121_unet_sigmoid_gn(input_shape=(None, None, 1), output_channels=2, weights=None)
+    model.load_weights(
+        "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/20180731_0/best_val_acc_se_densenet_gn_fold0_random_0_1i_2o_20180801.h5")
+    pred = tta_predict(model, img, batch_size=1)
+    # print(pred)
+    pred = np.squeeze(pred, 0)
+    print(pred.shape)
+    pred = np.where(pred > 0.5, 255, 0)
+    cv2.imwrite("/home/topsky/Desktop/mask_04+246ori_f1_random.tif", pred[..., 0])
+    # plt.imshow(pred[..., 0], "gray")
+    # plt.show()
+
+
+def tta_predict(model, images, batch_size=1):
     """
 
-    :param image: 3-d numpy array, pre-processed image
-    :return: 3-d numpy array, (h, w, c)
+    :param images: 4-d numpy array, pre-processed image. (b, h, w, c)
+    :return: 4-d numpy array, (b, h, w, c)
     """
-
-    # rotate_angle_lst = [0, 4, 8, 12]
-    rotate_angle_lst = [0]
+    rotate_angle_lst = [0, 4, 8, 12]
     h_flip_lst = [0, 1]
+    bs, height, width, channels = images.shape
     aug_lst = [(is_h_flip, rotate_angle) for is_h_flip in h_flip_lst
                for rotate_angle in rotate_angle_lst]
-    preds_0 = []
-    preds_1 = []
+    preds = []
     for aug in tqdm(aug_lst):
-        img = image.copy()
-        img = hflip(img, aug[0])
-        print(img.shape)
-        img = rotate(img, aug[1])
-        print(img.shape)
-        img = np.expand_dims(img, 0)
-        print(img.shape)
-        pred = model.predict(img, batch_size=1)
-        print(aug, "predicted")
-        pred = np.squeeze(pred, axis=0)
-        pred = rotate(pred, -aug[1])
-        pred = hflip(pred, aug[0])
-        pred_0 = pred[..., 0]
-        pred_1 = pred[..., 1]
-        preds_0.append(pred_0)
-        preds_1.append(pred_1)
-    preds_0 = np.mean(preds_0, axis=0)
-    preds_1 = np.mean(preds_1, axis=1)
-    preds = np.concatenate([preds_0, preds_1], axis=0)
-    preds = np.transpose(preds, axes=[1, 2, 0])
-    return preds
+        imgs = images.copy()
+        imgs = hflip_images(imgs, aug[0])
+        imgs = rotate_images(imgs, aug[1])
+        pred = model.predict(imgs, batch_size=batch_size)
+        pred = rotate_images(pred, -aug[1])
+        pred = hflip_images(pred, aug[0])
+        preds.append(pred)
+    preds = np.array(preds)  # (nb_aug, b, h, w, c)
+
+    preds_0 = preds[..., 0]  # (nb_aug, b, h, w)
+    preds_1 = preds[..., 1]  # (nb_aug, b, h, w)
+
+    pred_0 = np.zeros(shape=(bs, height, width), dtype=np.float64)
+    pred_1 = np.zeros(shape=(bs, height, width), dtype=np.float64)
+    for b in range(bs):
+        pred_b_0 = preds_0[:, b, :, :]  # (nb_aug, h, w)
+        pred_b_0 = np.mean(pred_b_0, axis=0)  # (h, w)
+        pred_0[b] = pred_b_0
+
+        pred_b_1 = preds_1[:, b, :, :]  # (nb_aug, h, w)
+        pred_b_1 = np.mean(pred_b_1, axis=0)  # (h, w)
+        pred_1[b] = pred_b_1
+
+    pred_0 = np.expand_dims(pred_0, axis=-1)
+    pred_1 = np.expand_dims(pred_1, axis=-1)
+    pred = np.concatenate([pred_0, pred_1], axis=-1)
+    return pred
 
 
 # not use
 def vflip(img):
-    return cv2.flip(img, 0)
+    return np.flip(img, 0)
 
 
 # not use
@@ -191,6 +234,7 @@ def __main():
     np.set_printoptions(threshold=np.inf)
     # erode_dilate_op()
     # compare_image()
+    tta_test()
     pass
 
 
