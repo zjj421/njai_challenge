@@ -14,6 +14,13 @@ class Config(object):
         #     os.makedirs(self.log_root)
         self.learning_rate_scheduler_csv = "/home/jzhang/helloworld/mtcnn/cb/func/learning_rate_scheduler.csv"
 
+        self.input_channels = 1
+        self.output_channels = 2
+        self.random_crop_size = (512, 512)
+        self.mask_nb = 0
+        self.model_weights_save_root = "/home/jzhang/helloworld/mtcnn/cb/model_weights/new"
+        self.model_name = "se_inception_resnet_v2_gn"
+
 
 def __main():
     pass

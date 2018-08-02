@@ -16,14 +16,25 @@ from func.data_io import DataSet
 from func.model_densenet import get_densenet121_unet_sigmoid_gn
 from tqdm import tqdm
 
+MASK_FILE_LIST = ['03+261mask.tif', '03+262mask.tif', '04+246mask.tif', '04+248mask.tif', '04+251mask.tif']
+
+IMAGE_FILE_LIST = ['03+261ori.tif', '03+262ori.tif', '04+246ori.tif', '04+248ori.tif', '04+251ori.tif']
+
 
 def erode_dilate_op():
     # img = cv2.imread("/home/topsky/Desktop/04+251mask.tif", cv2.IMREAD_GRAYSCALE)
-    img = cv2.imread("/home/topsky/Desktop/04+246mask.tif", cv2.IMREAD_GRAYSCALE)
+    img = cv2.imread(
+        "/media/topsky/HHH/jzhang_root/data/njai/cbct/CBCT_testingset/CBCT_testingset_pred20180801_42/04+246mask.tif",
+        cv2.IMREAD_GRAYSCALE)
+    h, w = img.shape
+    print(h * w)
 
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))  # 定义结构元素
     # opening = cv2.morphologyEx(img, cv2.MORPH_OPEN, kernel)  # 开运算
     result = cv2.morphologyEx(img, cv2.MORPH_CLOSE, kernel)  # 闭运算
+    cv2.imwrite("/home/topsky/Desktop/test.tif", result)
+    diff = (result - img) * 1
+    print(sum(diff.flatten()))
     result = np.concatenate([img, result], axis=0)
     plt.imshow(result, "gray")
     plt.show()
@@ -54,10 +65,45 @@ def fill_contour(image_contour):
     return im_out
 
 
+def get_pixel_wise_diff(image1, image2):
+    assert image1.shape == image2.shape
+    diff = (image1 != image2) * 1
+    diff = sum(diff.flatten())
+    return diff
+
+
+def do_get_cop_acc():
+    pred_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/CBCT_testingset/CBCT_testingset_pred20180801_42/best_val_loss_se_densenet_gn_fold01_1i_2o_20180730/mask0"
+    mask_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/CBCT_testingset/CBCT_testingset_pred20180801_42"
+    # mask_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/CBCT_testingset_custom_masks"
+    pred_file_path_list = [os.path.join(pred_dir, x) for x in MASK_FILE_LIST]
+    mask_file_path_list = [os.path.join(mask_dir, x) for x in IMAGE_FILE_LIST]
+    diffs = 0
+    total_pixels = 0
+    for i in range(len(pred_file_path_list)):
+        pred = cv2.imread(pred_file_path_list[i], cv2.IMREAD_GRAYSCALE)
+        mask = cv2.imread(mask_file_path_list[i], cv2.IMREAD_GRAYSCALE)
+        diffs += get_pixel_wise_diff(pred, mask)
+        total_pixels += pred.size
+    acc = (total_pixels - diffs) / total_pixels
+    print("acc:", acc)
+
+
+def do_fill_contour():
+    contour = "/media/topsky/HHH/jzhang_root/data/njai/cbct/CBCT_testingset/CBCT_testingset_pred20180801_42/04+246mask_ori.tif"
+    contour = cv2.imread(contour, cv2.IMREAD_GRAYSCALE)
+    image = fill_contour(contour)
+    print(get_pixel_wise_diff(contour, image))
+    # plt.imshow(contour, "gray")
+    # plt.show()
+
+
 def do_convert_custom_label2contour():
-    test_image_dir = ""
-    custom_label_image_dir = ""
-    contour_save_dir = ""
+    test_image_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/CBCT_testingset/CBCT_testingset"
+    custom_label_image_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/CBCT_testingset_custom_label"
+    contour_save_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/CBCT_testingset_custom_contour"
+    if not os.path.isdir(contour_save_dir):
+        os.makedirs(contour_save_dir)
     file_lst = next(os.walk(custom_label_image_dir))[2]
     contour_file_path_lst = [os.path.join(custom_label_image_dir, x) for x in file_lst]
     test_image_file_path_lst = [os.path.join(test_image_dir, x) for x in file_lst]
@@ -72,17 +118,19 @@ def do_convert_custom_label2contour():
 
         h, w, c = img_contour.shape
         img_contour = np.zeros(shape=(h, w))
-        for i in range(h):
-            for j in range(w):
-                sum_ = sum(is_same[i, j])
+        for j in range(h):
+            for k in range(w):
+                sum_ = sum(is_same[j, k])
                 if sum_ != 3:
-                    img_contour[i, j] = 255
+                    img_contour[j, k] = 255
         cv2.imwrite(image_contour_file_path_lst[i], img_contour)
 
 
 def do_conver_contour2mask():
-    contour_dir = ""
-    mask_save_dir = ""
+    contour_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/CBCT_testingset/CBCT_testingset_pred20180801_42/best_val_loss_se_densenet_gn_fold01_1i_2o_20180730/mask0"
+    mask_save_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/CBCT_testingset/CBCT_testingset_pred20180801_42/best_val_loss_se_densenet_gn_fold01_1i_2o_20180730/mask0_fill_contour"
+    if not os.path.isdir(mask_save_dir):
+        os.makedirs(mask_save_dir)
     file_lst = next(os.walk(contour_dir))[2]
     contour_file_path_lst = [os.path.join(contour_dir, x) for x in file_lst]
     mask_file_path_lst = [os.path.join(mask_save_dir, x) for x in file_lst]
@@ -151,7 +199,7 @@ def tta_test():
 
 def tta_predict(model, images, batch_size=1):
     """
-
+    对预处理过的图片进行预测
     :param images: 4-d numpy array, pre-processed image. (b, h, w, c)
     :return: 4-d numpy array, (b, h, w, c)
     """
@@ -233,8 +281,12 @@ def random_contrast(img, alpha):
 def __main():
     np.set_printoptions(threshold=np.inf)
     # erode_dilate_op()
+    # do_fill_contour()
+    # do_convert_custom_label2contour()
+    do_conver_contour2mask()
+    # do_get_cop_acc()
     # compare_image()
-    tta_test()
+    # tta_test()
     pass
 
 
