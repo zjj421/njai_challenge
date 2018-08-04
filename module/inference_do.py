@@ -13,33 +13,15 @@ from func.data_io import DataSet
 from func.model_densenet import get_densenet121_unet_sigmoid_gn
 from func.model_inception_resnet_v2_gn import get_inception_resnet_v2_unet_sigmoid_gn
 from func.model_se_inception_resnet_v2_gn import get_se_inception_resnet_v2_unet_sigmoid_gn
+from func.others_try.model import get_dilated_unet
 from tqdm import tqdm
 
+from module.cbct_utils import combine_image_mask
 from module.competition_utils import ensemble_from_pred, convert_submission, IMAGE_FILE_LIST, MASK_FILE_LIST, \
     TEST_DATA_DIR
 from module.inference_base import ModelDeployment, get_acc
 from module.utils_public import get_file_path_list, apply_mask
 import matplotlib.pyplot as plt
-
-
-def do_combine_show_image_and_mask():
-    image_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/CBCT_testingset/CBCT_testingset"
-    mask_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/CBCT_testingset/CBCT_testingset_pred20180801_42"
-    result_save_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/CBCT_testingset/CBCT_testingset_pred20180801_42_image"
-    result_path_slt = [os.path.join(result_save_dir, x) for x in MASK_FILE_LIST]
-    image_path_lst = [os.path.join(image_dir, x) for x in IMAGE_FILE_LIST]
-    mask_path_lst = [os.path.join(mask_dir, x) for x in MASK_FILE_LIST]
-
-    if not os.path.isdir(result_save_dir):
-        os.makedirs(result_save_dir)
-
-    for i in range(len(image_path_lst)):
-        image = cv2.imread(image_path_lst[i], cv2.IMREAD_COLOR)[..., ::-1]
-
-        mask = cv2.imread(mask_path_lst[i], cv2.IMREAD_GRAYSCALE)
-
-        result = apply_mask(image, mask, color=[152,245, 255])
-        cv2.imwrite(result_path_slt[i], result)
 
 
 def do_get_acc():
@@ -70,6 +52,15 @@ def infer_do():
     # model_obj.predict_and_show(images, show_output_channels=2)
 
 
+def do_combine_image_and_mask():
+    # image_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/CBCT_testingset/CBCT_testingset"
+    # mask_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/CBCT_testingset/CBCT_testingset_pred20180801_42/final_pred"
+    image_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/train"
+    mask_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/label"
+    result_save_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct_visualization/train_label"
+    combine_image_mask(image_dir, mask_dir, result_save_dir, is_test=False)
+
+
 def do_predict_and_show():
     h5_data_path = "/home/topsky/helloworld/study/njai_challenge/cbct/inputs/data_0717.hdf5"
     val_fold_nb = "01"
@@ -80,11 +71,33 @@ def do_predict_and_show():
     pred_save_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/training_pred_result"
 
     model_obj = ModelDeployment(model_def, model_weights)
-    # dataset = DataSet(h5_data_path, val_fold_nb=val_fold_nb)
-    # images, masks = dataset.prepare_data(is_train=is_train)
     pred = model_obj.predict_from_h5data(h5_data_path, val_fold_nb=val_fold_nb, use_channels=2, is_train=is_train,
                                          save_dir=pred_save_dir, mask_nb=0)
+
     print(pred.shape)
+
+
+def do_predict_custom():
+    model = get_dilated_unet(
+        input_shape=(None, None, 1),
+        mode='cascade',
+        filters=32,
+        n_class=1
+    )
+    model_weights = "/home/topsky/helloworld/study/njai_challenge/cbct/func/others_try/model_weights.hdf5"
+    img_path = "/media/topsky/HHH/jzhang_root/data/njai/cbct/CBCT_testingset/CBCT_testingset/04+246ori.tif"
+    img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
+    img = np.expand_dims(img, axis=-1)
+    img = np.expand_dims(img, axis=0)
+    img = DataSet.preprocess(img, mode="image")
+    # print(img.shape)
+    # exit()
+    model.load_weights(model_weights)
+    pred = model.predict(img, batch_size=1)
+    pred_img = np.squeeze(pred[0], -1)
+    pred_img = DataSet.de_preprocess(pred_img, mode="image")
+    plt.imshow(pred_img, "gray")
+    plt.show()
 
 
 def do_evaluate():
@@ -134,13 +147,30 @@ def do_inference_and_sub():
     # model_weights_lst = model_weights_lst1
 
     use_channels = 2
-    model_def_lst = [get_se_inception_resnet_v2_unet_sigmoid_gn]
+    model_def_lst = [get_densenet121_unet_sigmoid_gn]
     model_weights_lst = [
-        "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/new/20180802_0/se_inception_resnet_v2_gn_fold01_random_kfold_0_1i_2o.h5"]
-    sub_json_file_path = "/home/topsky/helloworld/study/njai_challenge/submissions/20180802_0_single_model_irnet_fold01_c2.json"
-    test_result_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/CBCT_testingset/CBCT_testingset_pred20180802_0"
+        "/home/topsky/helloworld/study/njai_challenge/cbct/model_weights/new/20180804_test/se_densenet_gn_fold13_random_kfold_0_1i_2o.h5"]
+    sub_json_file_path = "/home/topsky/helloworld/study/njai_challenge/submissions/20180804_0_single_model_irnet_fold01_c2.json"
+    test_result_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/CBCT_testingset/CBCT_testingset_pred20180804_0"
 
     inference_and_sub(model_def_lst, model_weights_lst, use_channels, sub_json_file_path, test_result_dir, tta=False)
+
+
+def do_inference_and_sub_custom():
+
+    use_channels = 1
+    model_def_lst = [get_dilated_unet(
+        input_shape=(None, None, 1),
+        mode='cascade',
+        filters=32,
+        n_class=1
+    )]
+    model_weights_lst = [
+        "/home/topsky/helloworld/study/njai_challenge/cbct/func/others_try/model_weights.hdf5"]
+    sub_json_file_path = "/home/topsky/helloworld/study/njai_challenge/submissions/20180803_0_single_model_0804_0.json"
+    test_result_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct/CBCT_testingset/CBCT_testingset_pred20180804_0"
+
+    inference_and_sub_custom(model_def_lst, model_weights_lst, use_channels, sub_json_file_path, test_result_dir, tta=False)
 
 
 def inference_and_sub(model_def_lst, model_weights_lst, use_channels, sub_json_file_path, test_result_dir,
@@ -213,14 +243,85 @@ def inference_and_sub(model_def_lst, model_weights_lst, use_channels, sub_json_f
     convert_submission(dst_mask_file_path_lst, sub_json_file_path)
 
 
+def inference_and_sub_custom(model_def_lst, model_weights_lst, use_channels, sub_json_file_path, test_result_dir,
+                      input_channels=1, output_channels=2, tta=False):
+    assert len(model_def_lst) == len(model_weights_lst)
+
+    image_file_path_lst = [os.path.join(TEST_DATA_DIR, x) for x in IMAGE_FILE_LIST]
+    dst_mask_file_path_lst = [os.path.join(test_result_dir, x) for x in MASK_FILE_LIST]
+    preds = []
+    for i, (model_def, model_weights) in tqdm(enumerate(zip(model_def_lst, model_weights_lst))):
+        if i == 0:
+            model_obj = ModelDeployment(model_def, model_weights)
+        else:
+            try:
+                model_obj.reload_weights(model_weights)
+            except:
+                del model_obj
+                model_obj = model_def
+        sub_result_save_dir_basename = os.path.splitext(os.path.basename(model_weights))[0]
+        sub_result_save_dir = os.path.join(test_result_dir, sub_result_save_dir_basename)
+
+        pred = model_obj.predict_from_files(image_file_path_lst,
+                                            batch_size=5,
+                                            mask_file_lst=MASK_FILE_LIST,
+                                            tta=tta,
+                                            is_save_npy=False,
+                                            is_save_mask0=False,
+                                            is_save_mask1=False,
+                                            result_save_dir=sub_result_save_dir,
+                                            use_channels=use_channels
+                                            )  # (b, h, w, c)
+        preds.append(pred)
+
+    preds = np.array(preds)  # (nb_model, b, h, w, c)
+    print(preds.shape)
+    preds_0 = preds[..., 0]  # (nb_model, b, h, w)
+    print(preds_0.shape)
+    pred_0 = []
+    for b in range(len(image_file_path_lst)):
+        pred_b_0 = preds_0[:, b, :, :]
+        pred_b_0 = np.mean(pred_b_0, axis=0)
+        pred_0.append(pred_b_0)
+    pred_0 = np.array(pred_0)
+    final_npy_save_dir = os.path.join(test_result_dir, "final_npy")
+    if use_channels == 1:
+        ModelDeployment.save_npy(pred_0, MASK_FILE_LIST, final_npy_save_dir)
+        pred_0 = np.where(pred_0 > 0.5, 255, 0)
+        for i in range(len(pred_0)):
+            cv2.imwrite(dst_mask_file_path_lst[i], pred_0[i])
+
+    else:
+        preds_1 = preds[..., 1]  # (nb_model, b, h, w)
+
+        pred_1 = []
+        for b in range(len(image_file_path_lst)):
+            pred_b_1 = preds_1[:, b, :, :]
+            pred_b_1 = np.mean(pred_b_1, axis=0)
+            pred_1.append(pred_b_1)
+        pred_1 = np.array(pred_1)
+        final_npy_save_dir = os.path.join(test_result_dir, "final_npy")
+        final_preds = np.concatenate([np.expand_dims(pred_0, -1), np.expand_dims(pred_1, -1)], axis=-1)
+        ModelDeployment.save_npy(final_preds, MASK_FILE_LIST, final_npy_save_dir)
+        pred_0 = np.where(pred_0 > 0.5, 255, 0)
+        pred_1 = np.where(pred_1 > 0.5, 1, 0)
+        pred_0 = pred_0 * pred_1
+        for i in range(len(pred_0)):
+            cv2.imwrite(dst_mask_file_path_lst[i], pred_0[i])
+
+    convert_submission(dst_mask_file_path_lst, sub_json_file_path)
+
+
 def __main():
     K.set_learning_phase(0)
     # make_sub()
-    # do_inference_and_sub()
+    do_inference_and_sub()
     # do_evaluate()
     # infer_do()
     # do_predict_and_show()
-    do_combine_show_image_and_mask()
+    # do_combine_image_and_mask()
+    # do_predict_custom()
+    # do_inference_and_sub_custom()
     pass
 
 

@@ -94,15 +94,17 @@ class ModelDeployment(object):
         Args:
             images: 4-d numpy array. preprocessed image. (b, h, w, c=1)
             batch_size:
-            use_channels: int, default to 1. 如果模型输出通道数为2，可以控制输出几个channel.默认输出第一个channel的预测值.
+            use_channels: int, default to 2. 如果模型输出通道数为2，可以控制输出几个channel.默认输出第一个channel的预测值.
 
-        Returns: numpy array.
+        Returns: 4-d numpy array.
 
         """
         images = DataSet.preprocess(images, mode="image")
+
         outputs = self.model.predict(images, batch_size)
         if use_channels == 1:
             outputs = outputs[..., 0]
+            outputs = np.expand_dims(outputs, -1)
         return outputs
 
     def tta_predict(self, images, batch_size=1, use_channels=2):
@@ -167,6 +169,7 @@ class ModelDeployment(object):
 
         """
         imgs = self.read_images(image_path_lst)
+        print(imgs.shape)
         if tta:
             pred = self.tta_predict(imgs, batch_size=batch_size, use_channels=use_channels)
         else:

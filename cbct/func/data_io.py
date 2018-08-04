@@ -15,7 +15,7 @@ from keras.preprocessing.image import ImageDataGenerator
 
 class DataSet(object):
     def __init__(self, h5_data_path, val_fold_nb, random_k_fold=False, random_k_fold_npy=None, input_channels=1,
-                 output_channels=2, random_crop_size=(256, 256), mask_nb=0, batch_size=4
+                 output_channels=2, random_crop_size=(256, 256), mask_nb=0, batch_size=4, train_ids=None, val_ids=None
 
                  ):
         f_h5 = h5py.File(h5_data_path, 'r')
@@ -47,6 +47,11 @@ class DataSet(object):
         self.f_h5 = f_h5
         self.train_keys = train_keys
         self.val_keys = val_keys
+        if train_ids:
+            self.train_keys = train_ids
+        if val_ids:
+            self.val_keys = val_ids
+
         self.val_fold_nb = val_fold_nb
 
         self.input_channels = input_channels
@@ -57,9 +62,9 @@ class DataSet(object):
 
     def get_train_val_steps(self, is_train):
         if is_train:
-            return len(self.train_keys) // self.batch_size
+            return int(np.ceil(len(self.train_keys) / self.batch_size))
         else:
-            return len(self.val_keys) // self.batch_size
+            return int(np.ceil(len(self.val_keys) / self.batch_size))
 
     def prepare_data(self, is_train):
         input_channels = self.input_channels
@@ -150,6 +155,7 @@ class DataSet(object):
             mask = self.f_h5[mask_str][key].value
             masks.append(mask)
         masks = np.array(masks)
+        masks = np.where(masks == 0, 0, 255)
         masks = np.expand_dims(masks, axis=-1)
         return masks
 
@@ -231,7 +237,6 @@ class DataSet(object):
             images_cropped[i] = self.random_crop(images[i], self.random_crop_size, seed)
             masks_cropped[i] = self.random_crop(masks[i], self.random_crop_size, seed)
         print("model input shape: ({}, {})".format(images_cropped.shape, masks_cropped.shape))
-
 
         keras_data_gen_x = ImageDataGenerator(**keras_data_gen_param, preprocessing_function=self.preprocess_x)
         keras_data_gen_y = ImageDataGenerator(**keras_data_gen_param, preprocessing_function=self.preprocess_y)

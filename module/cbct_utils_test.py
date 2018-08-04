@@ -18,6 +18,12 @@ from matplotlib import pyplot as plt
 from module.utils_public import apply_mask
 
 
+def get_custom_train_val_ids():
+    img_dir = "/media/topsky/HHH/jzhang_root/data/njai/cbct_visualization/2"
+    file = next(os.walk(img_dir))[2]
+    file = ["{:08}".format(int(os.path.splitext(x)[0])) for x in file]
+    print(file)
+
 def do_show_training_log():
     log_csv = "/home/topsky/helloworld/study/njai_challenge/cbct/logs/log_se_inception_resnet_v2_gn_fold01_random_kfold_0_1i_2o_0.csv"
     show_training_log(log_csv, fig_save_path=None, show_columns=["binary_acc_ch0"], epochs=220, ylim_range=(0.99, 1))
@@ -129,8 +135,10 @@ def read_data_test():
 
 def read_image_test():
     # img_path = "/media/topsky/HHH/jzhang_root/data/njai/cbct/CBCT_testingset/CBCT_testingset/04+246ori.tif"
-    img_path = "/home/topsky/Desktop/002.tif"
+    img_path = "/media/topsky/HHH/jzhang_root/data/njai/cbct/CBCT_testingset/CBCT_testingset/04+246ori.tif"
     img = cv2.imread(img_path, cv2.IMREAD_UNCHANGED)
+    print(img.shape)
+    exit()
     img_2 = np.concatenate([img, img], axis=0)
     print(img.shape)
     h, w, _ = img.shape
@@ -181,8 +189,9 @@ def read_image_test():
 def __main():
     np.set_printoptions(threshold=np.inf)
     # read_h5_test()
-    do_show_training_log()
+    # do_show_training_log()
     # read_image_test()
+    get_custom_train_val_ids()
     pass
 
 

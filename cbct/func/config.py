@@ -16,10 +16,11 @@ class Config(object):
 
         self.input_channels = 1
         self.output_channels = 2
-        self.random_crop_size = (512, 512)
+        self.random_crop_size = None
         self.mask_nb = 0
         self.model_weights_save_root = "/home/jzhang/helloworld/mtcnn/cb/model_weights/new"
-        self.model_name = "se_inception_resnet_v2_gn"
+        self.model_name = "se_densenet_gn"
+        # self.model_name = "se_inception_resnet_v2_gn"
 
 
 def __main():

@@ -40,6 +40,7 @@ def apply_mask(image, mask, color, alpha=0.5):
     Returns: 3-d numpy array.
 
     """
+    assert (np.unique(mask) == np.array([0, 255])).all()
     mask_image = np.zeros_like(image)
     for c in range(3):
         mask_image[:, :, c] = np.where(mask == 255,

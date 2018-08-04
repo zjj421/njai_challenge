@@ -2,7 +2,7 @@
 
 ### Try
 
-1. 3 channels input.
+1. 3 channels input. tried, no use.
 2. One possible solution would be to train on crops and predict on full images.
  And that segmentation works better when the object is smaller than the input image. 
 3. Test time augmentation. try averaging different predictions predicted by different model before postprocessing.
@@ -11,6 +11,11 @@
 
 5. find best low threshold and high threshold between which the predicted mask is unreliable. Sorted all results unreliable picels area, and additionally processed the worst case. For these cases, we selected best-performing models and adjusted probability. 
 
+6. strong scaling augmentation. a lot of zooming in and out and aspect ratio changes before taking the crops.
+
+7. try binary dilation post-processing.
+
+8. Adjusting threshold according to validation set.
 
 ### Advices
 
